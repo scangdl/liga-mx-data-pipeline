@@ -1,0 +1,18 @@
+# Entornos y caches
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Datos pesados / regenerables (no van al repo)
+data/*.parquet
+data/*.json
+data/*.pkl
+liga_mx_odds_2018_2025.csv
+incoming/
+predictions/*.csv
+predictions/*.parquet
+
+# Notas de operacion local
+*.log
+NOTE_*.txt
