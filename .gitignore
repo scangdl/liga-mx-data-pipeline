@@ -16,3 +16,6 @@ predictions/*.parquet
 # Notas de operacion local
 *.log
 NOTE_*.txt
+data/.odds_api_key
+data/*.csv
+liga_mx_data/

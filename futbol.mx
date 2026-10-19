@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""
+Descarga automática de CSVs de FootyStats para Liga MX
+Usa browser-use para evadir Cloudflare
+"""
+
+import asyncio
+import os
+from pathlib import Path
+from browser_use import Agent
+from langchain_openai import ChatOpenAI
+
+FOOTYSTATS_SEASONS = {
+    '2026-2027': 17099,
+    '2025-2026': 15234,
+    '2024-2025': 12136,
+    '2023-2024': 9525,
+    '2022-2023': 7425,
+    '2021-2022': 6038,
+    '2020-2021': 4507,
+    '2019-2020': 2270,
+    '2018-2019': 1582,
+    '2017-2018': 307,
+    '2016-2017': 308,
+    '2015-2016': 309,
+    '2014-2015': 310,
+    '2013-2014': 311,
+    '2012-2013': 312,
+}
+
+DOWNLOAD_DIR = Path.home() / "ligamx_data" / "footystats"
+DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+
+async def download_season(season: str, comp_id: int):
+    """Descarga un CSV de una temporada específica"""
+    url = f"https://footystats.org/c-dl.php?type=matches&comp={comp_id}"
+    output_file = DOWNLOAD_DIR / f"{season}_matches.csv"
+    
+    if output_file.exists():
+        print(f"  ⏭️  {season}: Ya existe, saltando")
+        return True
+    
+    print(f"  📥 {season}: Descargando...")
+    
+    agent = Agent(
+        task=f"""
+        1. Ve a {url}
+        2. Espera a que se descargue el archivo CSV (puede tardar unos segundos en pasar Cloudflare)
+        3. El archivo se descargará automáticamente. Verifica que se guardó como {output_file}
+        4. Si hay un botón de descarga o link, haz click en él
+        """,
+        llm=ChatOpenAI(model="gpt-4o"),
+    )
+    
+    try:
+        result = await agent.run()
+        # Verificar si se descargó
+        await asyncio.sleep(5)
+        if output_file.exists() and output_file.stat().st_size > 1000:
+            print(f"  ✅ {season}: Descargado ({output_file.stat().st_size} bytes)")
+            return True
+        else:
+            print(f"  ❌ {season}: No se descargó correctamente")
+            return False
+    except Exception as e:
+        print(f"  ❌ {season}: Error - {e}")
+        return False
+
+
+async def main():
+    print("🚀 Iniciando descarga automática FootyStats Liga MX")
+    print(f"📁 Directorio: {DOWNLOAD_DIR}")
+    print(f"📊 Temporadas: {len(FOOTYSTATS_SEASONS)}")
+    
+    success = 0
+    for season, comp_id in FOOTYSTATS_SEASONS.items():
+        if await download_season(season, comp_id):
+            success += 1
+        await asyncio.sleep(3)  # Rate limiting
+    
+    print(f"\n✅ Completado: {success}/{len(FOOTYSTATS_SEASONS)} temporadas descargadas")
+    
+    # Listar archivos
+    files = sorted(DOWNLOAD_DIR.glob("*_matches.csv"))
+    for f in files:
+        size = f.stat().st_size / 1024
+        print(f"  {f.name}: {size:.1f} KB")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
