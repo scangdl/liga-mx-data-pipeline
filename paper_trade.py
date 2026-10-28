@@ -14,6 +14,8 @@ Reglas:
   - Bankroll inicial 1000 (u). Stake = kelly_frac * edge / (odds-1), cap 5%.
   - Solo apuesta si edge > EDGE_MIN (default 4%).
   - Sin cuota Under/Over real -> no apuesta (nada inventado).
+
+USA features_lib.StateBuilder para features (single source of truth).
 """
 import argparse
 import json
@@ -30,6 +32,7 @@ DATA = FUTBOL / "data"
 PRED = FUTBOL / "predictions"
 sys.path.insert(0, str(FUTBOL))
 from team_names import canon_series  # noqa: E402
+from features_lib import StateBuilder, build_state_for_inference, log, american_to_decimal, poisson_btts_prob  # noqa: E402
 
 BANKROLL0 = 1000.0
 KELLY_FRAC = 0.25
@@ -53,51 +56,158 @@ def american_to_decimal(ml):
     return ml / 100 + 1 if ml > 0 else 100 / (-ml) + 1
 
 
+def canon_team_espn(name, master_teams):
+    """Normaliza nombre ESPN/Odds API a canonico del master."""
+    try:
+        c = canon_series(pd.Series([str(name)]))[0]
+        if c in master_teams:
+            return c
+        stripped = str(c).strip().lower()
+        for suf in (" fc", " uanl", " unam"):
+            if stripped.endswith(suf):
+                c2 = canon_series(pd.Series([stripped[: -len(suf)]]))[0]
+                if c2 in master_teams:
+                    return c2
+        return c
+    except Exception:
+        return str(name)
+
+
+def load_state():
+    """Construye estado final desde master usando features_lib."""
+    return build_state_for_inference(DATA / "liga_mx_master.parquet")
+
+
 # ============================================================
-# Features de un fixture (identico a predict_jornada.py)
+# Estado global (cargado una vez al importar)
 # ============================================================
-def build_state():
-    master = pd.read_parquet(DATA / "liga_mx_master.parquet").sort_values("date").reset_index(drop=True)
-    played = master[master["hs"].notna() & master["as_"].notna()].reset_index(drop=True)
+state = build_state_for_inference(DATA / "liga_mx_master.parquet")
+elo = state["elo"]
+last_match = {k: v for k, v in state["last_match"].items()}
+hist = {k: list(v) for k, v in state["hist"].items()}
+ewma = {k: {r: list(v) for r, v in v.items()} for k, v in state["ewma"].items()}
+team_state = {k: {"opp_elo": list(v["opp_elo"]), "dates": list(v["dates"])}
+              for k, v in state["team_state"].items()}
+tabla_torneo = {k: {tk: list(tv) for tk, tv in v.items()} for k, v in state["tabla_torneo"].items()}
+h2h = {k: list(v) for k, v in state["h2h"].items()}
+lgf_h = float(state["lgf_h"]) if isinstance(state["lgf_h"], (int, float)) else float(np.mean(state["lgf_h"]))
+lgf_a = float(state["lgf_a"]) if isinstance(state["lgf_a"], (int, float)) else float(np.mean(state["lgf_a"]))
+current_tor_id = state.get("current_tor_id")
 
-    K, HOME_ADV = 32.0, 80.0
-    elo, last_match, hist, ewma = {}, {}, {}, {}
-    lgf_h, lgf_a = [], []
-    ALPHA = 0.93
+master_teams = set(pd.read_parquet(DATA / "liga_mx_master.parquet")["home"].unique())
 
-    for _, r in played.iterrows():
-        h, a = r["home"], r["away"]
-        hs, as_ = float(r["hs"]), float(r["as_"])
-        eh, ea = elo.get(h, 1500.0), elo.get(a, 1500.0)
-        exp_h = 1.0 / (1.0 + 10 ** (-((eh + HOME_ADV - ea) / 400.0)))
-        s = 1.0 if hs > as_ else (0.0 if hs < as_ else 0.5)
-        margen = abs(hs - as_)
-        mult = 1.0 if margen <= 1 else (1.5 if margen == 2 else 1.75 + (margen - 3) * 0.125)
-        delta = K * mult * (s - exp_h)
-        elo[h] = eh + delta
-        elo[a] = ea - delta
-        last_match[h] = last_match[a] = r["date"]
-        ptos_h = 3.0 if hs > as_ else (1.0 if hs == as_ else 0.0)
-        ptos_a = 3.0 - ptos_h if ptos_h in (0.0, 3.0) else 1.0
-        btts = 1.0 if (hs > 0 and as_ > 0) else 0.0
-        hist.setdefault(h, []).append((hs, as_, btts, ptos_h, 1))
-        hist.setdefault(a, []).append((as_, hs, btts, ptos_a, 0))
-        for team, role, gf, ga in ((h, 1, hs, as_), (a, 0, as_, hs)):
-            st = ewma.setdefault(team, {}).setdefault(role, [None, None])
-            st[0] = gf if st[0] is None else ALPHA * st[0] + (1 - ALPHA) * gf
-            st[1] = ga if st[1] is None else ALPHA * st[1] + (1 - ALPHA) * ga
-        lgf_h.append(hs)
-        lgf_a.append(as_)
 
+def canon_team_espn(name):
+    try:
+        c = canon_series(pd.Series([str(name)]))[0]
+        if c in master_teams:
+            return c
+        stripped = str(c).strip().lower()
+        for suf in (" fc", " uanl", " unam"):
+            if stripped.endswith(suf):
+                c2 = canon_series(pd.Series([stripped[: -len(suf)]]))[0]
+                if c2 in master_teams:
+                    return c2
+        return c
+    except Exception:
+        return str(name)
+
+
+# ============================================================
+# Helpers
+# ============================================================
+def form_features(team):
+    h = hist.get(team, [])
+    n = len(h)
     return {
-        "elo": elo, "last": last_match, "hist": hist, "ewma": ewma,
-        "lgf_h": float(np.mean(lgf_h[-800:])), "lgf_a": float(np.mean(lgf_a[-800:])),
+        "gf10": np.mean([x[0] for x in h[-10:]]) if n else np.nan,
+        "ga10": np.mean([x[1] for x in h[-10:]]) if n else np.nan,
+        "btts_rate10": np.mean([x[2] for x in h[-10:]]) if n else np.nan,
+        "ppg10": np.mean([x[3] for x in h[-10:]]) if n else np.nan,
     }
 
 
-def fixture_row(st, home, away, d_local):
+def lam_features(home, away):
+    sh = ewma.get(home, {}).get(1)
+    sa = ewma.get(away, {}).get(0)
+    if not sh or not sa or sh[0] is None or sa[0] is None:
+        return np.nan, np.nan
+    ah, dh = sh
+    aa, da = sa
+    lam_h = (ah / lgf_h) * (sa[1] / lgf_h) * lgf_h
+    lam_a = (aa / lgf_a) * (sh[1] / lgf_a) * lgf_a
+    return lam_h, lam_a
+
+
+def table_pos(team):
+    th = tabla_torneo.get(team)
+    if not th or th[2] == 0:
+        return (np.nan, np.nan)
+    pos = 1 + sum(1 for v in tabla_torneo.values() if v[0] > th[0])
+    return (pos, th[0] / th[2])
+
+
+def h2h_features(h, a):
+    key = tuple(sorted([h, a]))
+    prev = h2h.get(key, [])
+    if not prev:
+        return (np.nan, np.nan, np.nan, 0)
+    h_home = h == key[0]
+    gf_side = [x[0] if h_home else x[1] for x in prev[-6:]]
+    ga_side = [x[1] if h_home else x[0] for x in prev[-6:]]
+    return (float(np.mean([x[2] for x in prev[-6:]])),
+            float(np.mean(gf_side)), float(np.mean(ga_side)), len(prev[-6:]))
+
+
+def sos_cong(team, d):
+    st = team_state.get(team)
+    sos = float(np.mean(st["opp_elo"][-5:])) if st and st.get("opp_elo") else np.nan
+    cong = sum(1 for x in st["dates"][-5:] if (d - x).days <= 14) if st and st.get("dates") else 0
+    return sos, cong
+
+
+def last10(team):
+    h = hist.get(team, [])
+    if not h:
+        return (np.nan, np.nan, np.nan, np.nan)
+    arr = h[-10:]
+    return (np.mean([x[0] for x in arr]), np.mean([x[1] for x in arr]),
+            np.mean([x[2] for x in arr]), np.mean([x[3] for x in arr]))
+
+
+def table_pos(team):
+    th = tabla_torneo.get(team)
+    if not th or th[2] == 0:
+        return (np.nan, np.nan)
+    pos = 1 + sum(1 for v in tabla_torneo.values() if v[0] > th[0])
+    return (pos, th[0] / th[2])
+
+
+def h2h_features(h, a):
+    key = tuple(sorted([h, a]))
+    prev = h2h.get(key, [])
+    if not prev:
+        return (np.nan, np.nan, np.nan, 0)
+    h_home = h == key[0]
+    gf_side = [x[0] if h_home else x[1] for x in prev[-6:]]
+    ga_side = [x[1] if h_home else x[0] for x in prev[-6:]]
+    return (float(np.mean([x[2] for x in prev[-6:]])),
+            float(np.mean(gf_side)), float(np.mean(ga_side)), len(prev[-6:]))
+
+
+def sos_cong(team, d):
+    st = team_state.get(team)
+    sos = float(np.mean(st["opp_elo"][-5:])) if st and st.get("opp_elo") else np.nan
+    cong = sum(1 for x in st["dates"][-5:] if (d - x).days <= 14) if st and st.get("dates") else 0
+    return sos, cong
+
+
+# ============================================================
+# fixture_row usando estado reconstruido
+# ============================================================
+def fixture_row(home, away, d_local):
     def last10(team):
-        h = st["hist"].get(team, [])
+        h = hist.get(team, [])
         if not h:
             return (np.nan, np.nan, np.nan, np.nan)
         arr = h[-10:]
@@ -106,21 +216,20 @@ def fixture_row(st, home, away, d_local):
 
     gh = last10(home)
     ga = last10(away)
-    hhome = [y for y in st["hist"].get(home, []) if y[4] == 1][-6:]
-    aaway = [y for y in st["hist"].get(away, []) if y[4] == 0][-6:]
+    hhome = [y for y in hist.get(home, []) if y[4] == 1][-6:]
+    aaway = [y for y in hist.get(away, []) if y[4] == 0][-6:]
 
-    sh = st["ewma"].get(home, {}).get(1)
-    sa = st["ewma"].get(away, {}).get(0)
+    sh = ewma.get(home, {}).get(1)
+    sa = ewma.get(away, {}).get(0)
     lam_h = lam_a = np.nan
     if sh and sa:
-        lgf_h, lgf_a = st["lgf_h"], st["lgf_a"]
         lam_h = (sh[0] / lgf_h) * (sa[1] / lgf_h) * lgf_h
         lam_a = (sa[0] / lgf_a) * (sh[1] / lgf_a) * lgf_a
 
     return {
-        "elo_h": st["elo"].get(home, 1500.0), "elo_a": st["elo"].get(away, 1500.0),
-        "rest_h": (d_local - st["last"][home]).days if home in st["last"] else np.nan,
-        "rest_a": (d_local - st["last"][away]).days if away in st["last"] else np.nan,
+        "elo_h": elo.get(home, 1500.0), "elo_a": elo.get(away, 1500.0),
+        "rest_h": (d_local - last_match[home]).days if home in last_match else np.nan,
+        "rest_a": (d_local - last_match[away]).days if away in last_match else np.nan,
         "gf10_h": gh[0], "ga10_h": gh[1], "btts_rate10_h": gh[2], "ppg10_h": gh[3],
         "gf10_a": ga[0], "ga10_a": ga[1], "btts_rate10_a": ga[2], "ppg10_a": ga[3],
         "gf_home_as_home": np.mean([x[0] for x in hhome]) if hhome else np.nan,
@@ -146,9 +255,6 @@ def cmd_place():
     if trades_file.exists():
         trades = pd.read_csv(trades_file)
         done_dates = pd.to_datetime(trades["date"], format="mixed").dt.normalize()
-        # solo bloquean re-evaluacion los fixtures evaluados CON cuota
-        # (SKIP/OPEN/SETTLED); los NO_BET (sin cuota en su momento) deben
-        # poder re-evaluarse cuando aparezcan cuotas, sin duplicarse
         done_keys = set()
         nobet_keys = set()
         for d, h, a, s in zip(done_dates, trades["home"], trades["away"], trades["status"]):
@@ -159,11 +265,9 @@ def cmd_place():
     else:
         trades = pd.DataFrame()
         done_keys = set()
+        nobet_keys = set()
 
-    st = build_state()
-    # equipos canonicos del master (para match de nombres ESPN/Odds API)
-    master_teams = set(pd.read_parquet(DATA / "liga_mx_master.parquet")["home"].unique())
-    # odds O/U 2.5 multi-casa de la Odds API (mediana de 14-19 books) si existen
+    # odds O/U 2.5 multi-casa de la Odds API
     ou_api = {}
     api_csv = DATA / "odds_api_jornada.csv"
     if api_csv.exists():
@@ -179,36 +283,19 @@ def cmd_place():
         except Exception as e:
             log(f"  (odds API csv ilegible: {e})")
 
-    def canon_team_espn(name):
-        # nombres de la Odds API (ESPN): normalizar y si no esta en aliases,
-        # limpiar sufijos 'fc' y volver a intentar
-        try:
-            c = canon_series(pd.Series([str(name)]))[0]
-            if c in set(master_teams):
-                return c
-            # reintentar sin sufijos FC/UANL/UNAM (ej: 'atlante fc' -> 'atlante')
-            stripped = str(c).strip().lower()
-            for suf in (" fc", " uanl", " unam"):
-                if stripped.endswith(suf):
-                    c2 = canon_series(pd.Series([stripped[: -len(suf)]]))[0]
-                    if c2 in set(master_teams):
-                        return c2
-            return c
-        except Exception:
-            return str(name)
-
     rows = []
     for fx in fixtures:
         if fx.get("state") != "pre":
             continue
         home = canon_series(pd.Series([fx["home"]]))[0]
         away = canon_series(pd.Series([fx["away"]]))[0]
-        d_local = pd.to_datetime(fx["date"], utc=True).tz_convert("America/Mexico_City").tz_localize(None).normalize()
+        d_local = pd.to_datetime(fx["date"], utc=True).tz_convert(
+            "America/Mexico_City").tz_localize(None).normalize()
         key = (d_local, home, away)
         if key in done_keys:
             continue
 
-        feats = fixture_row(st, home, away, d_local)
+        feats = fixture_row(home, away, d_local)
         feats["elo_diff"] = feats["elo_h"] - feats["elo_a"]
         feats["rest_diff"] = feats["rest_h"] - feats["rest_a"]
         Xf = pd.DataFrame([feats])[FEATS].fillna(means)
@@ -228,18 +315,18 @@ def cmd_place():
                     pass
                 break
         if dec is None:
-            o = fx  # fallback viejo: JSON de ESPN con over_ml de DraftKings
+            o = fx
             dec = american_to_decimal(o.get("over_ml"))
             line = o.get("line")
         if dec is None or not line or float(line) != 2.5:
             if key in nobet_keys:
-                continue  # ya esta registrada sin cuota; no duplicar
+                continue
             rows.append({"date": d_local, "home": home, "away": away,
                          "p_model": round(p_model, 4), "line": line,
                          "dec_odds": None, "edge": None, "stake": 0.0,
                          "status": "NO_BET", "result": None, "pnl": None})
             continue
-        p_mkt = 1.0 / dec  # sin normalizar (margen pequeño en O/U 2.5)
+        p_mkt = 1.0 / dec
         edge = p_model - p_mkt
         if edge > EDGE_MIN:
             kelly = KELLY_FRAC * (p_model * dec - 1) / (dec - 1)
@@ -265,12 +352,43 @@ def cmd_place():
         log("Sin entradas nuevas (todos los fixtures ya evaluados o sin cuota)")
 
 
-def bankroll():
-    state_f = PRED / "paper_state.json"
-    if state_f.exists():
-        with open(state_f) as f:
-            return json.load(f).get("bankroll", BANKROLL0)
-    return BANKROLL0
+# ============================================================
+# fixture_row usando estado reconstruido
+# ============================================================
+def fixture_row(home, away, d_local):
+    def last10(team):
+        h = hist.get(team, [])
+        if not h:
+            return (np.nan, np.nan, np.nan, np.nan)
+        arr = h[-10:]
+        return (np.mean([x[0] for x in arr]), np.mean([x[1] for x in arr]),
+                np.mean([x[2] for x in arr]), np.mean([x[3] for x in arr]))
+
+    gh = last10(home)
+    ga = last10(away)
+    hhome = [y for y in hist.get(home, []) if y[4] == 1][-6:]
+    aaway = [y for y in hist.get(away, []) if y[4] == 0][-6:]
+
+    sh = ewma.get(home, {}).get(1)
+    sa = ewma.get(away, {}).get(0)
+    lam_h = lam_a = np.nan
+    if sh and sa:
+        lam_h = (sh[0] / lgf_h) * (sa[1] / lgf_h) * lgf_h
+        lam_a = (sa[0] / lgf_a) * (sh[1] / lgf_a) * lgf_a
+
+    return {
+        "elo_h": elo.get(home, 1500.0), "elo_a": elo.get(away, 1500.0),
+        "rest_h": (d_local - last_match[home]).days if home in last_match else np.nan,
+        "rest_a": (d_local - last_match[away]).days if away in last_match else np.nan,
+        "gf10_h": gh[0], "ga10_h": gh[1], "btts_rate10_h": gh[2], "ppg10_h": gh[3],
+        "gf10_a": ga[0], "ga10_a": ga[1], "btts_rate10_a": ga[2], "ppg10_a": ga[3],
+        "gf_home_as_home": np.mean([x[0] for x in hhome]) if hhome else np.nan,
+        "ga_home_as_home": np.mean([x[1] for x in hhome]) if hhome else np.nan,
+        "gf_away_as_away": np.mean([x[0] for x in aaway]) if aaway else np.nan,
+        "ga_away_as_away": np.mean([x[1] for x in aaway]) if aaway else np.nan,
+        "lam_h": lam_h, "lam_a": lam_a,
+        "imp_h": np.nan, "imp_d": np.nan, "imp_a": np.nan,
+    }
 
 
 # ============================================================
@@ -289,8 +407,6 @@ def cmd_settle():
 
     master = pd.read_parquet(DATA / "liga_mx_master.parquet")
     master["key_date"] = pd.to_datetime(master["date"]).dt.normalize()
-    # football-data registra fecha UK y ESPN fecha local (CDMX, UTC-6):
-    # el mismo partido puede caer a un dia distinto en cada fuente.
     keymap = {}
     for r in master.itertuples():
         for off in (-1, 0, 1):
@@ -299,23 +415,22 @@ def cmd_settle():
 
     trades = pd.read_csv(trades_file)
     trades["date"] = pd.to_datetime(trades["date"], format="mixed").dt.normalize()
+    if "result" in trades.columns:
+        trades["result"] = trades["result"].astype(object)
 
-    # ---- closing line + CLV: ultima fila pre-kickoff del historial de cuotas ----
     hist_f = DATA / "odds_history.csv"
     hist = None
     if hist_f.exists():
         try:
             hist = pd.read_csv(hist_f)
-            hist["fetched_at"] = pd.to_datetime(hist["fetched_at"], format="mixed")
+            hist["fetched_at"] = pd.to_datetime(hist["fetched_at"], format="mixed", utc=True)
             hist["commence"] = pd.to_datetime(hist["commence"], utc=True)
-            # normalizar nombres Odds API -> canonicos del master (mismo mapa de team_names)
             hist["norm_home"] = canon_series(hist["home"].astype(str).str.strip().str.lower())
             hist["norm_away"] = canon_series(hist["away"].astype(str).str.strip().str.lower())
         except Exception as e:
             log(f"  (historial odds ilegible: {e})")
 
     def closing_line(trade_row):
-        """Over mediano mas cercano ANTES del kickoff para este partido (None si no hay)."""
         if hist is None:
             return None
         th = canon_series(pd.Series([str(trade_row["home"])]))[0]
@@ -323,8 +438,10 @@ def cmd_settle():
         sub = hist[(hist["norm_home"] == th) & (hist["norm_away"] == ta)]
         if sub.empty:
             return None
-        kickoff = sub["commence"].min()
-        pre = sub[sub["commence"] == kickoff].sort_values("fetched_at")
+        kickoff = sub["commence"].max()
+        pre = sub[sub["fetched_at"] < kickoff].sort_values("fetched_at")
+        if pre.empty:
+            pre = sub.sort_values("fetched_at")
         if pre.empty:
             return None
         return float(pre["over25_med"].iloc[-1])
@@ -344,17 +461,14 @@ def cmd_settle():
         trades.loc[i, "pnl"] = round(pnl, 2)
         trades.loc[i, "status"] = "SETTLED"
         settled += 1
-        # CLV: closing over vs cuota de entrada del trade
         cl = closing_line(t)
         if cl is not None and cl > 0:
             trades.loc[i, "close_odds"] = round(cl, 3)
-            # CLV% = (cuota entrada / closing) - 1  -> positivo = batimos la closing line
             trades.loc[i, "clv_pct"] = round((float(t["dec_odds"]) / cl - 1) * 100, 2)
 
     br = bankroll()
     state_f = PRED / "paper_state.json"
     if settled:
-        # bankroll = base + suma de TODOS los pnl liquidados (simple y auditable)
         br = BANKROLL0 + float(trades.loc[trades["status"] == "SETTLED", "pnl"].sum())
         with open(state_f, "w") as f:
             json.dump({"bankroll": round(br, 2)}, f)
@@ -366,7 +480,6 @@ def cmd_settle():
     if len(s):
         log(f"  Record: {int((s['result'] == 'WIN').sum())}-{int((s['result'] == 'LOSE').sum())} "
             f"| Yield: {s['pnl'].sum() / s['stake'].sum() * 100:.1f}% sobre {len(s)} apuestas")
-    # ---- reporte CLV: la metrica honesta de edge ----
     if "clv_pct" in trades.columns:
         sc = trades[trades["clv_pct"].notna()]
         if len(sc):
@@ -375,6 +488,14 @@ def cmd_settle():
                 f"CLV promedio {sc['clv_pct'].mean():+.2f}% | mediana {sc['clv_pct'].median():+.2f}% | "
                 f"{beat}/{len(sc)} batieron la closing ({beat/len(sc)*100:.0f}%)")
             log("  (CLV>0 sistematico = edge real; el acierto y el yield son varianza)")
+
+
+def bankroll():
+    state_f = PRED / "paper_state.json"
+    if state_f.exists():
+        with open(state_f) as f:
+            return json.load(f).get("bankroll", BANKROLL0)
+    return BANKROLL0
 
 
 def main():
