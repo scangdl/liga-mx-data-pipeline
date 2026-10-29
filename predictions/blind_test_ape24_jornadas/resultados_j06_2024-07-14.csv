@@ -1,0 +1,6 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Necaxa vs Puebla,4-1,1,0.5978,0.6336,0.5514,1,1
+Leon vs Pachuca,0-0,0,0.5147,0.5642,0.5514,0,0
+Monterrey vs Cruz Azul,0-4,0,0.5026,0.5094,0.5514,0,0
+Santos vs Pumas,1-1,1,0.5353,0.5419,0.5514,1,1
+Toluca vs Juarez,3-2,1,0.5297,0.6209,0.5514,1,1

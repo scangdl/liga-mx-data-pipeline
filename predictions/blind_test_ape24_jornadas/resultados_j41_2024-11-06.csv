@@ -1,0 +1,4 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Santos vs Chivas,0-2,0,0.6473,0.5428,0.5498,0,0
+Pumas vs Queretaro,2-0,0,0.4205,0.6338,0.5498,1,0
+Leon vs Mazatlan,0-0,0,0.3759,0.4607,0.5498,1,1

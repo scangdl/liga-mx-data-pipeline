@@ -1,0 +1,5 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Cruz Azul vs Juarez,4-0,0,0.528,0.5804,0.5507,0,0
+Monterrey vs Pumas,0-0,0,0.5144,0.4846,0.5507,0,1
+Leon vs Atlas,0-0,0,0.5466,0.4892,0.5507,0,1
+Tijuana vs America,2-2,1,0.5616,0.5753,0.5507,1,1

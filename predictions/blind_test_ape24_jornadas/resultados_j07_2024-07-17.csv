@@ -1,0 +1,6 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Queretaro vs Chivas,0-2,0,0.3989,0.5921,0.5519,1,0
+Puebla vs Leon,2-2,1,0.5831,0.5521,0.5519,1,1
+Cruz Azul vs Tijuana,3-0,0,0.5662,0.5836,0.5519,0,0
+Pachuca vs San Luis,2-0,0,0.6434,0.5916,0.5519,0,0
+Atlas vs Santos,1-0,0,0.5138,0.5088,0.5519,0,0

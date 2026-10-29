@@ -1,0 +1,5 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Leon vs Queretaro,4-0,0,0.5415,0.501,0.5504,0,0
+Atlas vs Tijuana,0-0,0,0.5882,0.5399,0.5504,0,0
+Pumas vs Cruz Azul,0-2,0,0.3757,0.5471,0.5504,1,0
+Tigres vs Pachuca,2-1,1,0.6354,0.5426,0.5504,1,1

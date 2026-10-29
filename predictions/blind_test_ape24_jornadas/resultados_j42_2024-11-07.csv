@@ -1,0 +1,6 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+America vs Pachuca,2-1,1,0.5431,0.5865,0.5498,1,1
+Juarez vs Tijuana,1-1,1,0.488,0.6191,0.5498,0,1
+Atlas vs Cruz Azul,2-2,1,0.7247,0.5728,0.5498,1,1
+Tigres vs Toluca,2-1,1,0.631,0.6052,0.5498,1,1
+Necaxa vs San Luis,1-1,1,0.4452,0.5942,0.5498,0,1

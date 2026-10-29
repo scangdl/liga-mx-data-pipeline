@@ -1,0 +1,4 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Juarez vs Tigres,0-1,0,0.6766,0.5846,0.5512,0,0
+Pumas vs Tijuana,1-0,0,0.5591,0.584,0.5512,0,0
+Santos vs Toluca,2-0,0,0.2649,0.6131,0.5512,1,0

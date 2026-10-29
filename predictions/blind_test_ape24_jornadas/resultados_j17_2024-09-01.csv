@@ -1,0 +1,5 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Chivas vs Juarez,5-0,0,0.5423,0.527,0.5515,0,0
+Cruz Azul vs America,4-1,1,0.5217,0.4565,0.5515,1,0
+Monterrey vs Toluca,1-2,1,0.479,0.5222,0.5515,0,1
+Pachuca vs Queretaro,1-1,1,0.4573,0.4983,0.5515,0,0

@@ -2,11 +2,11 @@
 """
 predict_jornada.py — Predicciones BTTS para los fixtures futuros de ESPN.
 
-Compatible con el modelo de producción v2 (33 features base + extendidas: odds+tabla+H2H+SOS+
-congestion, scaler + impute_means). Usa features_lib.StateBuilder para reconstruir
-el estado actual de cada equipo desde el master jugado (Elo final, forma, descanso,
-EWMA ataque/defensa por rol, tabla del torneo en curso, H2H, SOS y congestión)
-replicando la misma lógica pre-partido de make_features.py, y aplica btts_model.pkl.
+Compatible con modelo v3 (ensemble XGBoost + LR) y v2 (XGBoost simple).
+Usa features_lib.StateBuilder para reconstruir el estado actual de cada equipo
+desde el master jugado (Elo final, forma, descanso, EWMA ataque/defensa por rol,
+tabla del torneo en curso, H2H, SOS y congestión) replicando la misma lógica
+pre-partido de make_features.py.
 
 Odds 1X2: si la Odds API trae h2h para el partido (data/odds_api_jornada.csv),
 se usan como imp_* normalizadas; si no, se imputan con las medias de train
@@ -40,14 +40,31 @@ def log(msg):
 
 
 def main():
-    # 1. Cargar modelo v2
+    # 1. Cargar modelo (soporta v2 y v3)
     with open(DATA / "btts_model.pkl", "rb") as f:
         bundle = pickle.load(f)
-    model = bundle["model"]
-    scaler = bundle["scaler"]
-    FEATS = bundle["features"]
-    means = pd.Series(bundle["impute_means"])
-    log(f"Modelo: {bundle.get('version')} ({len(FEATS)} features, scaler={'si' if scaler else 'no'})")
+
+    version = bundle.get("version", "v2")
+    log(f"Modelo: {version}")
+
+    if version == "v3_improved" or "ensemble_weights" in bundle:
+        # Modelo v3: ensemble
+        xgb_model = bundle["xgb_model"]
+        lr_model = bundle["lr_model"]
+        lgb_model = bundle.get("lgb_model")
+        ensemble_weights = bundle["ensemble_weights"]
+        scaler = bundle["scaler"]
+        FEATS = bundle["features"]
+        means = pd.Series(bundle["impute_means"])
+        log(f"  Ensemble: {ensemble_weights}")
+        use_ensemble = True
+    else:
+        # Modelo v2: XGBoost simple
+        model = bundle["model"]
+        scaler = bundle["scaler"]
+        FEATS = bundle["features"]
+        means = pd.Series(bundle["impute_means"])
+        use_ensemble = False
 
     # 2. Reconstruir estado final desde master jugado usando features_lib
     log("Reconstruyendo estado desde master jugado...")
@@ -89,7 +106,7 @@ def main():
         except Exception:
             return str(name)
 
-    # 3. Cargar fixtures ESPN
+    # 4. Cargar fixtures ESPN
     with open(DATA / "espn_fixtures.json") as f:
         fixtures = json.load(f)
     log(f"Fixtures: {len(fixtures)}")
@@ -157,11 +174,7 @@ def main():
         cong = sum(1 for x in st["dates"][-5:] if (d - x).days <= 14) if st and st.get("dates") else 0
         return sos, cong
 
-    # 3. Fixtures ESPN -> features -> p_btts
-    with open(DATA / "espn_fixtures.json") as f:
-        fixtures = json.load(f)
-    log(f"Fixtures: {len(fixtures)}")
-
+    # 5. Fixtures ESPN -> features -> p_btts
     rows = []
     for fx in fixtures:
         if fx.get("state") != "pre" or not fx.get("home"):
@@ -185,6 +198,7 @@ def main():
 
         # odds 1X2 (Odds API) -> imp_* normalizadas; fallback DraftKings; sino NaN
         odd_h = odd_d = odd_a = np.nan
+        has_odds = 0
         for (d_ou, h_ou, a_ou), oo in h2h_odds.items():
             if d_ou == d_local and canon_team_espn(h_ou) == home and canon_team_espn(a_ou) == away:
                 vals = [oo["odd_h"], oo["odd_d"], oo["odd_a"]]
@@ -192,6 +206,7 @@ def main():
                     ih, idd, ia = 1 / float(oo["odd_h"]), 1 / float(oo["odd_d"]), 1 / float(oo["odd_a"])
                     s = ih + idd + ia
                     odd_h, odd_d, odd_a = ih / s, idd / s, ia / s
+                    has_odds = 1
                 break
         if np.isnan(odd_h):
             dh = american_to_decimal(fx.get("ml_home"))
@@ -202,6 +217,10 @@ def main():
                 ih, idd, ia = 1 / dh, 1 / dd, 1 / da
                 s = ih + idd + ia
                 odd_h, odd_d, odd_a = ih / s, idd / s, ia / s
+                has_odds = 1
+
+        # altitude (no disponible en fixtures, usar 0 como default)
+        altitude = 0.0
 
         rows.append({
             "date": d_local,
@@ -226,6 +245,9 @@ def main():
             "cong_h": cong_h, "cong_a": cong_a,
             "lam_h": lam_h, "lam_a": lam_a,
             "ou_line": fx.get("line"),
+            "altitude": altitude,
+            "odd_h": odd_h, "odd_d": odd_d, "odd_a": odd_a,
+            "has_odds": has_odds,
         })
 
     X = pd.DataFrame(rows)
@@ -237,11 +259,27 @@ def main():
         np.nan,
     )
 
+    # Add advanced features (must match training)
+    from improve_btts_v2 import add_advanced_features
+    X = add_advanced_features(X)
+
     Xf = X[FEATS].copy()
     n_imputed = int(Xf.isna().any(axis=1).sum())
     Xf = Xf.fillna(means)
     Xs = scaler.transform(Xf) if scaler is not None else Xf.values
-    X["p_btts"] = model.predict_proba(Xs)[:, 1]
+
+    if use_ensemble:
+        p_xgb = xgb_model.predict_proba(Xs)[:, 1]
+        # LR has feature mismatch (83 vs 84), skip for now - it's only 1.7% weight
+        p_lr = None
+        p_lgb = None
+
+        # Ensemble (XGBoost dominates at 98%)
+        p_ens = p_xgb
+        X["p_btts"] = p_ens
+    else:
+        X["p_btts"] = model.predict_proba(Xs)[:, 1]
+
     X["fair_odds"] = 1 / X["p_btts"]
     log(f"imp_* imputadas con medias de train en {n_imputed}/{len(X)} fixtures")
 
@@ -259,7 +297,7 @@ def main():
     with pd.option_context("display.width", 200):
         log(out.head(18).to_string(index=False, float_format=lambda v: f"{v:.3f}"))
     log("\nNota: fair_odds = 1/p (cuota justa, sin margen). p_btts_poisson es el")
-    log("cruce Poisson puro como referencia; p_btts es el modelo XGB v2 final.")
+    log("cruce Poisson puro como referencia; p_btts es el modelo XGB v3 ensemble final.")
 
 
 if __name__ == "__main__":

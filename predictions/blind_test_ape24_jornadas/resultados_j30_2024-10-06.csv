@@ -1,0 +1,7 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Chivas vs Atlas,2-3,1,0.4982,0.4652,0.5509,0,0
+Leon vs America,1-1,1,0.6537,0.5505,0.5509,1,1
+Toluca vs Pumas,1-1,1,0.6404,0.5347,0.5509,1,1
+Cruz Azul vs Necaxa,3-0,0,0.4226,0.5993,0.5509,1,0
+Tigres vs Puebla,1-0,0,0.6362,0.5806,0.5509,0,0
+San Luis vs Monterrey,1-0,0,0.6404,0.546,0.5509,0,0

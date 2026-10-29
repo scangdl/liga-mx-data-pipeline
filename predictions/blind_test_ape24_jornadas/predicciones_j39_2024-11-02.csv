@@ -1,0 +1,6 @@
+date,home,away,p_btts_xgb,fair_odds,p_btts_lr,p_base_rate
+2024-11-02,San Luis,Puebla,0.5272,1.9,0.5215,0.5502
+2024-11-02,Mazatlan,America,0.659,1.52,0.5783,0.5502
+2024-11-02,Toluca,Leon,0.5719,1.75,0.5531,0.5502
+2024-11-02,Tijuana,Tigres,0.7007,1.43,0.5713,0.5502
+2024-11-02,Queretaro,Juarez,0.4527,2.21,0.4886,0.5502

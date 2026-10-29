@@ -1,0 +1,7 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Necaxa vs Pumas,2-0,0,0.49,0.5536,0.5522,1,0
+Tigres vs San Luis,1-0,0,0.7123,0.6104,0.5522,0,0
+Toluca vs Tijuana,4-0,0,0.5049,0.5821,0.5522,0,0
+Juarez vs Mazatlan,1-0,0,0.5727,0.5731,0.5522,0,0
+Puebla vs Queretaro,2-1,1,0.5655,0.6102,0.5522,1,1
+Atlas vs Pachuca,2-0,0,0.5727,0.5122,0.5522,0,0

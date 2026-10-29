@@ -1,0 +1,4 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Leon vs Cruz Azul,1-2,1,0.5945,0.6022,0.5522,1,1
+America vs Chivas,1-0,0,0.5025,0.5113,0.5522,0,0
+Santos vs Monterrey,0-2,0,0.3827,0.5646,0.5522,1,0

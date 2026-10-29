@@ -1,0 +1,5 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Pachuca vs Cruz Azul,2-4,1,0.5749,0.5528,0.5506,1,1
+Toluca vs Atlas,4-1,1,0.5326,0.5064,0.5506,1,1
+San Luis vs Santos,3-1,1,0.6458,0.5512,0.5506,1,1
+Chivas vs Monterrey,1-1,1,0.3536,0.459,0.5506,0,0

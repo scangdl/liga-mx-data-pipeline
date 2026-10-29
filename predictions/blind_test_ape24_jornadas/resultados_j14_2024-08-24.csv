@@ -1,0 +1,4 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Queretaro vs Cruz Azul,0-2,0,0.4996,0.6371,0.5515,1,0
+Mazatlan vs Pachuca,3-0,0,0.4941,0.5945,0.5515,1,0
+Tijuana vs Monterrey,2-2,1,0.5861,0.5551,0.5515,1,1

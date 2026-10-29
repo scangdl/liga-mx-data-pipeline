@@ -1,0 +1,4 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Tijuana vs Leon,2-1,1,0.5817,0.5766,0.5515,1,1
+San Luis vs Atlas,2-1,1,0.5855,0.5742,0.5515,1,1
+Mazatlan vs Puebla,1-1,1,0.5228,0.549,0.5515,1,1

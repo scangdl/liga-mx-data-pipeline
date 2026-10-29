@@ -1,0 +1,5 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Queretaro vs Toluca,0-1,0,0.5589,0.5489,0.5509,0,0
+Necaxa vs Tijuana,1-2,1,0.5297,0.5936,0.5509,1,1
+Atlas vs Mazatlan,0-0,0,0.5544,0.5831,0.5509,0,0
+Puebla vs Cruz Azul,1-2,1,0.4409,0.6683,0.5509,0,1

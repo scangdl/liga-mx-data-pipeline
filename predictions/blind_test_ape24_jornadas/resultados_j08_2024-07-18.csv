@@ -1,0 +1,5 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Tigres vs America,1-0,0,0.5858,0.5473,0.5519,0,0
+Toluca vs Mazatlan,3-0,0,0.5411,0.6101,0.5519,0,0
+Necaxa vs Monterrey,0-1,0,0.6368,0.6058,0.5519,0,0
+Juarez vs Pumas,1-2,1,0.6212,0.6109,0.5519,1,1

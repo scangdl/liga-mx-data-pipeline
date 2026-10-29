@@ -1,0 +1,6 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Pumas vs Puebla,1-0,0,0.56,0.5654,0.5515,0,0
+America vs Atlas,3-0,0,0.6259,0.6238,0.5515,0,0
+San Luis vs Cruz Azul,3-1,1,0.6026,0.5418,0.5515,1,1
+Queretaro vs Tigres,1-0,0,0.3024,0.5679,0.5515,1,0
+Pachuca vs Toluca,2-2,1,0.5463,0.4957,0.5515,1,0

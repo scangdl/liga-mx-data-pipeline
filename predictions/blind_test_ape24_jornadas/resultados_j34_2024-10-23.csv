@@ -1,0 +1,5 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Chivas vs Necaxa,3-2,1,0.5435,0.5249,0.5507,1,1
+Santos vs Pachuca,1-1,1,0.7378,0.5934,0.5507,1,1
+Toluca vs Puebla,5-0,0,0.6044,0.6175,0.5507,0,0
+Mazatlan vs Tigres,2-0,0,0.3766,0.4925,0.5507,1,1

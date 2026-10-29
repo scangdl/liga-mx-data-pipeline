@@ -1,0 +1,5 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Tijuana vs Chivas,4-2,1,0.5047,0.5957,0.5514,1,1
+Atlas vs Tigres,1-1,1,0.5834,0.5142,0.5514,1,1
+America vs Queretaro,3-1,1,0.5909,0.5669,0.5514,1,1
+Mazatlan vs San Luis,2-2,1,0.4561,0.6729,0.5514,0,1

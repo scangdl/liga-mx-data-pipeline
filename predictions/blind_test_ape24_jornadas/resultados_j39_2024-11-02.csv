@@ -1,0 +1,6 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+San Luis vs Puebla,2-0,0,0.5272,0.5215,0.5502,0,0
+Mazatlan vs America,0-5,0,0.659,0.5783,0.5502,0,0
+Toluca vs Leon,2-2,1,0.5719,0.5531,0.5502,1,1
+Tijuana vs Tigres,0-3,0,0.7007,0.5713,0.5502,0,0
+Queretaro vs Juarez,1-2,1,0.4527,0.4886,0.5502,0,0

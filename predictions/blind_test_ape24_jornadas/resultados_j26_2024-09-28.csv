@@ -1,0 +1,5 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Tigres vs Leon,2-2,1,0.5727,0.5136,0.5506,1,1
+Queretaro vs Necaxa,0-0,0,0.6295,0.5755,0.5506,0,0
+Puebla vs Juarez,2-3,1,0.5766,0.5743,0.5506,1,1
+Tijuana vs Mazatlan,1-0,0,0.6429,0.5923,0.5506,0,0

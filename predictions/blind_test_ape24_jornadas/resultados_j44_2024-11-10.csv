@@ -1,0 +1,5 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Necaxa vs Atlas,0-0,0,0.4583,0.5693,0.5499,1,0
+Cruz Azul vs Tigres,1-1,1,0.5395,0.5841,0.5499,1,1
+Pachuca vs Juarez,0-1,0,0.5728,0.5346,0.5499,0,0
+Toluca vs America,4-0,0,0.4965,0.5171,0.5499,1,0

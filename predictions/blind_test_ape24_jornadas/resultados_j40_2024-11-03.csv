@@ -1,0 +1,5 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Cruz Azul vs Santos,2-0,0,0.5381,0.5884,0.5502,0,0
+Pachuca vs Necaxa,6-2,1,0.6132,0.5984,0.5502,1,1
+Chivas vs Pumas,0-0,0,0.537,0.4791,0.5502,0,1
+Monterrey vs Atlas,4-0,0,0.4795,0.4916,0.5502,1,1

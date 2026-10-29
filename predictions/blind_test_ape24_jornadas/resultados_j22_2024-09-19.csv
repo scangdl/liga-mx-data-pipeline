@@ -1,0 +1,4 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Chivas vs Leon,2-0,0,0.4053,0.5124,0.5515,1,0
+Mazatlan vs Necaxa,0-0,0,0.5627,0.577,0.5515,0,0
+Monterrey vs Juarez,3-2,1,0.5383,0.5301,0.5515,1,1

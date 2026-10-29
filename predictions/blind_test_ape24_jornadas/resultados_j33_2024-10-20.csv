@@ -1,0 +1,6 @@
+partido,marcador,btts_real,p_xgb,p_lr,p_base,acierto_05_xgb,acierto_05_lr
+Monterrey vs Tigres,4-2,1,0.5265,0.6016,0.5509,1,1
+America vs Santos,3-0,0,0.5194,0.5885,0.5509,0,0
+Juarez vs Leon,2-3,1,0.5691,0.5749,0.5509,1,1
+Pachuca vs Chivas,0-2,0,0.6137,0.5013,0.5509,0,0
+Pumas vs San Luis,3-0,0,0.5165,0.4971,0.5509,0,1
