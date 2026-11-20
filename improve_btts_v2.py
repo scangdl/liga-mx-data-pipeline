@@ -29,7 +29,7 @@ warnings.filterwarnings("ignore")
 try:
     from lightgbm import LGBMClassifier
     HAS_LGBM = True
-except ImportError:
+except (ImportError, OSError):
     HAS_LGBM = False
 
 # Try Optuna

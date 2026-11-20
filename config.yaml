@@ -1,0 +1,281 @@
+# ============================================================
+# Liga MX Pipeline Configuration
+# ============================================================
+
+paths:
+  project_root: "/home/scan/liga-mx-data-pipeline"
+  data_dir: "data"
+  models_dir: "data/models"
+  predictions_dir: "predictions"
+  scripts_dir: "scripts"
+  cache_dir: ".cache"
+  logs_dir: "logs"
+
+  kaggle_raw: "kaggle_ligamx_raw.csv"
+  football_data_odds: "liga_mx_odds_2018_2025.csv"
+  espn_schedules: "espn_schedules.parquet"
+  espn_fixtures: "espn_fixtures.json"
+  odds_api_snapshot: "odds_api_snapshot.json"
+  odds_api_jornada: "odds_api_jornada.csv"
+  odds_history: "odds_history.csv"
+
+  master_parquet: "liga_mx_master.parquet"
+  master_csv: "liga_mx_master.csv"
+  features_parquet: "liga_mx_features.parquet"
+
+  btts_model: "btts_model.pkl"
+  btts_model_v3: "btts_model_v3.pkl"
+  over25_model: "over25_model.pkl"
+  model_1x2: "model_1x2.pkl"
+
+  btts_jornada: "btts_jornada.csv"
+  paper_trades_over25: "paper_trades_over25.csv"
+  paper_trades_1x2: "paper_trades_1x2.csv"
+  paper_state_over25: "paper_state_over25.json"
+  paper_state_1x2: "paper_state_1x2.json"
+  monthly_backtest_history: "monthly_backtest_history.csv"
+  decay_snapshots: "decay_snapshots.csv"
+
+data_sources:
+  football_data:
+    base_url: "https://football-data.co.uk"
+    current_season_path: "/new/MEX.csv"
+    encoding: "utf-8-sig"
+    user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+  espn:
+    base_url: "https://site.web.api.espn.com/apis/site/v2/sports/soccer/mex.1/scoreboard"
+    lookahead_days: 21
+    user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    timeout_seconds: 25
+
+  odds_api:
+    base_url: "https://api.the-odds-api.com/v4"
+    sport: "soccer_mexico_ligamx"
+    regions: "us,eu,uk"
+    markets: "h2h,totals"
+    odds_format: "decimal"
+    timeout_seconds: 25
+
+  sportmonks:
+    base_url: "https://api.sportmonks.com/v3/football"
+
+features:
+  elo_k: 32.0
+  elo_home_advantage: 80.0
+  ewma_alpha: 0.93
+  lgf_window: 800
+  form_window: 10
+  h2h_window: 6
+  sos_window: 5
+  congestion_window_days: 14
+  congestion_lookback: 5
+  btts_threshold: 1
+  over25_line: 2.5
+
+  base_features:
+    - "elo_diff"
+    - "elo_h"
+    - "elo_a"
+    - "rest_h"
+    - "rest_a"
+    - "rest_diff"
+    - "gf10_h"
+    - "ga10_h"
+    - "btts_rate10_h"
+    - "ppg10_h"
+    - "gf10_a"
+    - "ga10_a"
+    - "btts_rate10_a"
+    - "ppg10_a"
+    - "gf_home_as_home"
+    - "ga_home_as_home"
+    - "gf_away_as_away"
+    - "ga_away_as_away"
+    - "imp_h"
+    - "imp_d"
+    - "imp_a"
+
+  extended_features:
+    - "elo_diff"
+    - "elo_h"
+    - "elo_a"
+    - "rest_h"
+    - "rest_a"
+    - "rest_diff"
+    - "gf10_h"
+    - "ga10_h"
+    - "btts_rate10_h"
+    - "ppg10_h"
+    - "gf10_a"
+    - "ga10_a"
+    - "btts_rate10_a"
+    - "ppg10_a"
+    - "gf_home_as_home"
+    - "ga_home_as_home"
+    - "gf_away_as_away"
+    - "ga_away_as_away"
+    - "imp_h"
+    - "imp_d"
+    - "imp_a"
+    - "pos_table_h"
+    - "pos_table_a"
+    - "ppg_table_h"
+    - "ppg_table_a"
+    - "h2h_btts_rate"
+    - "h2h_gf"
+    - "h2h_ga"
+    - "h2h_n"
+    - "sos_h"
+    - "sos_a"
+    - "cong_h"
+    - "cong_a"
+    - "lam_h"
+    - "lam_a"
+
+  advanced_features:
+    - "elo_diff_sq"
+    - "elo_sum"
+    - "elo_ratio"
+    - "rest_min"
+    - "rest_max"
+    - "rest_short_h"
+    - "rest_short_a"
+    - "both_short_rest"
+    - "gf10_diff"
+    - "ga10_diff"
+    - "btts_rate10_diff"
+    - "ppg10_diff"
+    - "att_h"
+    - "def_h"
+    - "att_a"
+    - "def_a"
+    - "att_sum"
+    - "def_sum"
+    - "att_vs_def_h"
+    - "att_vs_def_a"
+    - "home_form"
+    - "away_form"
+    - "home_form_diff"
+    - "lam_sum"
+    - "lam_ratio"
+    - "lam_diff"
+    - "poisson_btts"
+    - "imp_draw"
+    - "imp_h_minus_a"
+    - "imp_entropy"
+    - "pos_diff"
+    - "ppg_diff"
+    - "pos_product"
+    - "h2h_gf_sum"
+    - "h2h_gf_diff"
+    - "has_h2h"
+    - "sos_diff"
+    - "cong_diff"
+    - "cong_sum"
+    - "high_cong"
+    - "total_attack"
+    - "total_defense"
+    - "attack_def_balance"
+
+models:
+  train_cut_date: "2024-07-01"
+
+  btts:
+    version: "v3_improved"
+    target: "btts"
+    feature_set: "extended_features"
+    advanced_features: true
+    xgb_params:
+      n_estimators: 500
+      max_depth: 4
+      learning_rate: 0.03
+      subsample: 0.8
+      colsample_bytree: 0.8
+      min_child_weight: 3
+      reg_alpha: 0.1
+      reg_lambda: 1.0
+      eval_metric: "logloss"
+      random_state: 42
+      n_jobs: 2
+    ensemble_weights:
+      xgb: 0.85
+      lr: 0.10
+      lgb: 0.05
+    calibration: "platt"
+
+  over25:
+    version: "v1"
+    target: "over25"
+    feature_set: "extended_features"
+    xgb_params:
+      n_estimators: 300
+      max_depth: 3
+      learning_rate: 0.05
+      subsample: 0.8
+      colsample_bytree: 0.8
+      eval_metric: "logloss"
+      random_state: 42
+      n_jobs: 2
+
+  one_x_two:
+    version: "v1"
+    target: "res_1x2"
+    feature_set: "extended_features"
+    xgb_params:
+      n_estimators: 400
+      max_depth: 4
+      learning_rate: 0.05
+      subsample: 0.8
+      colsample_bytree: 0.8
+      eval_metric: "mlogloss"
+      objective: "multi:softprob"
+      num_class: 3
+      early_stopping_rounds: 40
+      random_state: 42
+      n_jobs: 2
+
+trading:
+  initial_bankroll: 1000.0
+  kelly_fraction: 0.25
+  edge_min: 0.04
+  stake_cap: 0.05
+  max_open_bets: 10
+  markets:
+    over25:
+      model: "over25"
+      target: "over25"
+      line: 2.5
+    one_x_two:
+      model: "1x2"
+      target: "res_1x2"
+      line: null
+
+monitoring:
+  decay_detector:
+    rolling_window_days: 28
+    min_matches: 20
+    brier_degradation_threshold: 0.10
+    brier_2sigma_threshold: true
+    auc_critical: 0.52
+    auc_degradation_threshold: 0.05
+    reliability_threshold: 0.05
+    btts_rate_drift_threshold: 0.10
+
+  monthly_backtest:
+    window_days: 30
+    fallback_window_days: 60
+    min_matches: 10
+    brier_degradation_alert: 0.05
+    brier_degradation_critical: 0.10
+
+logging:
+  level: "INFO"
+  format: "json"
+  file: "logs/liga_mx.log"
+  max_bytes: 10485760
+  backup_count: 5
+
+telegram:
+  bot_token: ""  # Se lee de env TELEGRAM_BOT_TOKEN
+  chat_id: ""    # Se lee de env TELEGRAM_CHAT_ID

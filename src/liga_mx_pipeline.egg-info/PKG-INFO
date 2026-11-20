@@ -1,0 +1,94 @@
+Metadata-Version: 2.4
+Name: liga-mx-pipeline
+Version: 0.3.0
+Summary: Pipeline de datos y paper trading para Liga MX
+Author: Armando Sánchez Cendejas
+License: MIT
+Classifier: Development Status :: 4 - Beta
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.26.0
+Requires-Dist: pandas>=2.1.0
+Requires-Dist: scikit-learn>=1.3.0
+Requires-Dist: xgboost>=2.0.0
+Requires-Dist: lightgbm>=4.1.0
+Requires-Dist: optuna>=3.4.0
+Requires-Dist: scipy>=1.11.0
+Requires-Dist: pydantic>=2.5.0
+Requires-Dist: pyyaml>=6.0.1
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: requests>=2.31.0
+Requires-Dist: tenacity>=8.2.0
+Requires-Dist: structlog>=24.1.0
+Requires-Dist: pandera>=0.18.0
+Requires-Dist: mlflow>=2.9.0
+Requires-Dist: evidently>=0.4.0
+Requires-Dist: rich>=13.7.0
+Requires-Dist: typer>=0.9.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4.0; extra == "dev"
+Requires-Dist: pytest-cov>=4.1.0; extra == "dev"
+Requires-Dist: pytest-mock>=3.12.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+Requires-Dist: mypy>=1.7.0; extra == "dev"
+Requires-Dist: pre-commit>=3.6.0; extra == "dev"
+Requires-Dist: black>=23.12.0; extra == "dev"
+Requires-Dist: isort>=5.13.0; extra == "dev"
+Provides-Extra: docs
+Requires-Dist: mkdocs>=1.5.0; extra == "docs"
+Requires-Dist: mkdocs-material>=9.4.0; extra == "docs"
+Requires-Dist: mkdocstrings[python]>=0.24.0; extra == "docs"
+
+# ⚽ Liga MX Data Pipeline — Predicción y Paper Trading
+
+Pipeline de análisis de datos para la Liga MX (fútbol mexicano): ingesta de datos
+públicos, ingeniería de características, modelos predictivos y un sistema de
+paper trading con protocolo de test a ciegas.
+
+## Arquitectura
+
+```
+build_master.py        -> consolidado maestro (5,499 partidos, 2018-2026)
+fetch_fixtures_espn.py -> fixtures próximos vía API pública de ESPN
+fetch_odds_api.py       -> snapshot de cuotas del mercado (Odds API)
+make_features.py        -> features: forma reciente, Elo, descanso, tendencia goleadora
+poisson_btts.py        -> modelo Poisson BTTS (ambos equipos anotan)
+over25_model.pkl        -> clasificador Over/Under 2.5 goles (21 features)
+predict_jornada.py      -> predicciones por jornada
+paper_trade.py          -> paper trading: stake Kelly fraccional, sellado con SHA-256
+eval_walkforward.py     -> evaluación walk-forward (sin fuga de datos)
+eval_calibracion_backtest.py -> curvas de calibración y Brier por temporalidad
+```
+
+## Principios del proyecto
+
+- **Nada inventado:** cada número proviene de un archivo auditable. Fuentes:
+  football-data.co.uk (histórico 2018-2025) y APIs públicas (ESPN, Odds API).
+- **Test a ciegas:** las predicciones de cada jornada se sellan con SHA-256
+  ANTES de los partidos y se liquidan con marcadores reales — imposible ajustar.
+- **Honestidad de backtesting:** evaluación walk-forward; la calibración del
+  modelo se audita antes de arriesgar capital (aunque sea simulado).
+
+## Uso
+
+```bash
+python build_master.py          # reconstruye el maestro
+python update_and_predict.py    # fixtures + predicción de la jornada
+python paper_trade.py place     # registra apuestas con valor (edge > umbral)
+python paper_trade.py settle    # liquida con marcadores reales
+```
+
+## Estado
+
+- Modelos v2 en producción de paper trading (71 trades registrados)
+- Backtest histórico y curva de calibración en progreso
+- Roadmap: umbral de edge adaptativo por calibración, tracking de CLV
+
+---
+Autor: Armando Sánchez Cendejas — Zapopan, Jalisco.
+Datos públicos deportivos; sin datos personales de terceros.
