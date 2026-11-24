@@ -198,16 +198,51 @@ def build_master(force_rebuild: bool = False) -> pd.DataFrame:
     base["anio_torneo"] = base["date"].dt.year
 
     # ============================================================
-    # 7. SAVE
+    # 7. SAVE (versioned + symlink)
     # ============================================================
     _log("Saving master...")
     base = base.sort_values("date").reset_index(drop=True)
+
+    # Versioned filename with timestamp
+    from datetime import datetime
+    ts = datetime.now().strftime("%Y-%m-%d")
+    versioned_name = f"liga_mx_master_v{ts}.parquet"
+    versioned_path = OUT / versioned_name
+    base.to_parquet(versioned_path, index=False)
+
+    # Symlink to current version
     parquet_path = get_path("master_parquet")
+    if parquet_path.exists() or parquet_path.is_symlink():
+        parquet_path.unlink()
+    parquet_path.symlink_to(versioned_path.name)  # relative symlink
+
+    # Also save CSV (current only)
     csv_path = get_path("master_csv")
-    base.to_parquet(parquet_path, index=False)
     base.to_csv(csv_path, index=False, encoding="utf-8-sig")
-    _log(f"  {parquet_path} ({len(base)} rows, {len(base.columns)} cols)")
-    _log(f"  {csv_path}")
+
+    # Manifest of versions
+    manifest_path = OUT / "master_versions.json"
+    import json
+    if manifest_path.exists():
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+    else:
+        manifest = {"versions": []}
+    manifest["versions"].append({
+        "file": versioned_name,
+        "created": datetime.now().isoformat(),
+        "rows": len(base),
+        "cols": len(base.columns),
+        "date_range": f"{base['date'].min().date()} -> {base['date'].max().date()}",
+        "played": int((base["hs"].notna() & base["as_"].notna()).sum()),
+    })
+    with open(manifest_path, "w") as f:
+        json.dump(manifest, f, indent=2)
+
+    _log(f"  Versioned: {versioned_path}")
+    _log(f"  Symlink: {parquet_path} -> {versioned_name}")
+    _log(f"  CSV: {csv_path}")
+    _log(f"  Manifest: {manifest_path}")
 
     if UNKNOWN:
         _log(f"  WARNING unknown teams: {sorted(UNKNOWN)}")
