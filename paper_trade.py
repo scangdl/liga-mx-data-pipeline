@@ -28,13 +28,26 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-FUTBOL = Path("/home/petyt/futbolmx")
-DATA = FUTBOL / "data"
-PRED = FUTBOL / "predictions"
-sys.path.insert(0, str(FUTBOL))
-from team_names import canon_series  # noqa: E402
-from features_lib import StateBuilder, build_state_for_inference, log, american_to_decimal, poisson_btts_prob  # noqa: E402
+# Config-driven paths
+sys.path.insert(0, str(Path(__file__).parent))
+from src.liga_mx.config import get_config, get_path
+from team_names import canon_series
+from features_lib import StateBuilder, build_state_for_inference, log, american_to_decimal, poisson_btts_prob
 from improve_btts_v2 import add_advanced_features
+
+# Resolve paths via config
+DATA = get_path("data_dir")
+PRED = get_path("predictions_dir")
+MASTER_PARQUET = get_path("master_parquet")
+ESP_FIXTURES = get_path("espn_fixtures")
+ODDS_API_JORNADA = get_path("odds_api_jornada")
+ODDS_HISTORY = get_path("odds_history")
+OVER25_MODEL = get_path("over25_model")
+MODEL_1X2 = get_path("model_1x2")
+PAPER_TRADES_OVER25 = get_path("paper_trades_over25")
+PAPER_TRADES_1X2 = get_path("paper_trades_1x2")
+PAPER_STATE_OVER25 = get_path("paper_state_over25")
+PAPER_STATE_1X2 = get_path("paper_state_1x2")
 
 # ============================================================
 # CONFIG
@@ -47,8 +60,8 @@ MAX_OPEN_BETS = 10  # per market
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36"
 
 MARKETS = {
-    "over25": {"model_file": "over25_model.pkl", "target": "over25", "line": 2.5},
-    "1x2":    {"model_file": "model_1x2.pkl",  "target": "res_1x2", "line": None},
+    "over25": {"model_file": OVER25_MODEL, "target": "over25", "line": 2.5},
+    "1x2":    {"model_file": MODEL_1X2,  "target": "res_1x2", "line": None},
 }
 
 # ============================================================
@@ -96,7 +109,7 @@ def canon_team_espn(name, master_teams):
 # ============================================================
 # ESTADO GLOBAL (cargado una vez)
 # ============================================================
-state = build_state_for_inference(DATA / "liga_mx_master.parquet")
+state = build_state_for_inference(MASTER_PARQUET)
 elo = state["elo"]
 last_match = {k: v for k, v in state["last_match"].items()}
 hist = {k: list(v) for k, v in state["hist"].items()}
@@ -109,7 +122,7 @@ lgf_h = float(state["lgf_h"]) if isinstance(state["lgf_h"], (int, float)) else f
 lgf_a = float(state["lgf_a"]) if isinstance(state["lgf_a"], (int, float)) else float(np.mean(state["lgf_a"]))
 current_tor_id = state.get("current_tor_id")
 
-master_teams = set(pd.read_parquet(DATA / "liga_mx_master.parquet")["home"].unique())
+master_teams = set(pd.read_parquet(MASTER_PARQUET)["home"].unique())
 
 def canon_team_espn(name):
     try:
@@ -233,13 +246,14 @@ def fixture_row(home, away, d_local):
 # LOAD MODEL
 # ============================================================
 def load_model(market: str):
-    """Carga modelo y retorna (model, FEATS, means, bundle)."""
+    """Carga modelo y retorna (model, FEATS, means, scaler, bundle)."""
     model_file = MARKETS[market]["model_file"]
-    with open(DATA / model_file, "rb") as f:
+    with open(model_file, "rb") as f:
         bundle = pickle.load(f)
     # Soportar tanto 'means' como 'impute_means'
     means_key = "means" if "means" in bundle else "impute_means"
-    return bundle["model"], bundle["features"], pd.Series(bundle[means_key]), bundle
+    scaler = bundle.get("scaler")
+    return bundle["model"], bundle["features"], pd.Series(bundle[means_key]), scaler, bundle
 
 # ============================================================
 # ODDS HELPERS
@@ -247,7 +261,7 @@ def load_model(market: str):
 def load_odds_api():
     """Carga odds multi-casa de la Odds API."""
     ou_api = {}
-    api_csv = DATA / "odds_api_jornada.csv"
+    api_csv = ODDS_API_JORNADA
     if api_csv.exists():
         try:
             ou_df = pd.read_csv(api_csv)
@@ -308,10 +322,10 @@ def cmd_place(market: str = "over25"):
     log(f"PLACE {market.upper()}")
     log(f"{'='*60}")
 
-    model, FEATS, means, bundle = load_model(market)
+    model, FEATS, means, scaler, bundle = load_model(market)
     ou_api = load_odds_api()
 
-    trades_file = PRED / f"paper_trades_{market}.csv"
+    trades_file = PAPER_TRADES_OVER25 if market == "over25" else PAPER_TRADES_1X2
     if trades_file.exists():
         trades = pd.read_csv(trades_file)
         if len(trades) == 0:
@@ -332,7 +346,7 @@ def cmd_place(market: str = "over25"):
         done_keys = set()
         nobet_keys = set()
 
-    with open(DATA / "espn_fixtures.json") as f:
+    with open(ESP_FIXTURES) as f:
         fixtures = json.load(f)
 
     rows = []
@@ -354,6 +368,9 @@ def cmd_place(market: str = "over25"):
         Xf = pd.DataFrame([feats])
         Xf = add_advanced_features(Xf)
         Xf = Xf[FEATS].fillna(means)
+        # Apply scaler if available (new model format)
+        if scaler is not None:
+            Xf = scaler.transform(Xf)
 
         if market == "over25":
             # Binary
@@ -475,18 +492,17 @@ def cmd_settle(market: str = "over25"):
     log(f"SETTLE {market.upper()}")
     log(f"{'='*60}")
 
-    trades_file = PRED / f"paper_trades_{market}.csv"
+    trades_file = PAPER_TRADES_OVER25 if market == "over25" else PAPER_TRADES_1X2
     if not trades_file.exists():
         log("No hay trades.")
         return
 
     # Actualizar master
-    r = subprocess.run([sys.executable, str(FUTBOL / "update_and_predict.py")],
-                       capture_output=True, text=True)
+    r = subprocess.run([sys.executable, "update_and_predict.py"], capture_output=True, text=True)
     if r.returncode != 0:
         log(f"AVISO: fallo update ({r.stderr[-200:]}) — liquidando con master actual")
 
-    master = pd.read_parquet(DATA / "liga_mx_master.parquet")
+    master = pd.read_parquet(MASTER_PARQUET)
     master["key_date"] = pd.to_datetime(master["date"]).dt.normalize()
     keymap = {}
     for r in master.itertuples():
@@ -500,7 +516,7 @@ def cmd_settle(market: str = "over25"):
         trades["result"] = trades["result"].astype(object)
 
     # Historial odds para CLV
-    hist_f = DATA / "odds_history.csv"
+    hist_f = ODDS_HISTORY
     hist = None
     if hist_f.exists():
         try:
@@ -573,7 +589,7 @@ def cmd_settle(market: str = "over25"):
         settled += 1
 
     br = bankroll()
-    state_f = PRED / f"paper_state_{market}.json"
+    state_f = PAPER_STATE_OVER25 if market == "over25" else PAPER_STATE_1X2
     if settled:
         br = BANKROLL0 + float(trades.loc[trades["status"] == "SETTLED", "pnl"].sum())
         with open(state_f, "w") as f:
@@ -600,7 +616,7 @@ def bankroll():
     # En producción podrías separar por mercado
     total = BANKROLL0
     for m in ["over25", "1x2"]:
-        state_f = PRED / f"paper_state_{m}.json"
+        state_f = PAPER_STATE_OVER25 if m == "over25" else PAPER_STATE_1X2
         if state_f.exists():
             with open(state_f) as f:
                 total += json.load(f).get("bankroll", 0) - BANKROLL0
