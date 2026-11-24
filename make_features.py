@@ -7,24 +7,21 @@ Regla de oro: todo feature usa solo información disponible ANTES del partido.
   - Forma/descanso: ventanas de partidos previos
   - Odds: cuotas de cierre (disponibles pre-partido)
 
-Salida: /home/petyt/futbolmx/data/liga_mx_features.parquet
+Salida: <data_dir>/liga_mx_features.parquet
 
-USA features_lib.StateBuilder como single source of truth.
+USA features_lib.StateBuilder como single source of truth + config.yaml paths.
 """
 import sys
 from pathlib import Path
 
-FUTBOL = Path("/home/petyt/futbolmx")
-sys.path.insert(0, str(FUTBOL))
+# Add project root to path for config import
+sys.path.insert(0, str(Path(__file__).parent))
 
-import numpy as np
-import pandas as pd
+from src.liga_mx.config import get_config, get_path
+from features_lib import StateBuilder, log
 
-from features_lib import StateBuilder, log  # noqa: E402
-
-OUT = FUTBOL / "data"
-MASTER = OUT / "liga_mx_master.parquet"
-UNIFIED_OLD = Path("/home/petyt/liga_mx_data/liga_mx_unified_2018_2025.parquet")
+OUT = get_path("features_parquet")
+MASTER = get_path("master_parquet")
 
 
 def main():
@@ -33,26 +30,13 @@ def main():
     log(f"Master: {len(df)} partidos")
 
     # ============================================================
-    # 1-5. Features base via StateBuilder (Elo, descanso, forma, odds, altitud)
+    # 1-5. Features base via StateBuilder (Elo, descanso, forma, odds, etc.)
     # ============================================================
     sb = StateBuilder(df)
     feats_df = sb.build_all()
 
     # Concatenar features base
     df = pd.concat([df.reset_index(drop=True), feats_df], axis=1)
-
-    # ============================================================
-    # Altitud (legacy, opcional) — se mantiene para compatibilidad
-    # ============================================================
-    try:
-        old = pd.read_parquet(UNIFIED_OLD)
-        stadium_alt = old.dropna(subset=["stadium"]).drop_duplicates("stadium")[["stadium", "altitude", "city"]]
-        stadium_alt = stadium_alt.set_index("stadium")["altitude"].to_dict()
-        df["altitude"] = df["venue"].map(stadium_alt)
-        log(f"Altitud mapeada: {df['altitude'].notna().sum()}/{len(df)} partidos (venues: {df['venue'].nunique()})")
-    except Exception as e:
-        log(f"Altitud: no disponible ({e})")
-        df["altitude"] = np.nan
 
     # ============================================================
     # Odds -> probabilidades implícitas 1X2 (normalizadas, sin margen)
@@ -84,11 +68,13 @@ def main():
     # ============================================================
     # GUARDAR
     # ============================================================
-    out = OUT / "liga_mx_features.parquet"
+    out = OUT
     df.to_parquet(out, index=False)
     log(f"\nGuardado: {out} ({len(df)} filas, {len(df.columns)} cols)")
     log("\nColumnas: " + ", ".join(df.columns))
 
 
 if __name__ == "__main__":
+    import numpy as np
+    import pandas as pd
     main()
