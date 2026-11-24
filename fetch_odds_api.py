@@ -7,6 +7,9 @@ por evento. Salida: data/odds_api_snapshot.json + CSV plano.
 
 Uso:
     fetch_odds_api.py            # jornada proxima (eventos activos)
+
+Historial para CLV: particionado mensual (odds_history_YYYY-MM.csv)
+para evitar archivo único que crece ~1.8M filas/año.
 """
 import csv
 import json
@@ -14,9 +17,13 @@ import time
 import urllib.request
 from pathlib import Path
 
-FUTBOL = Path("/home/petyt/futbolmx")
-DATA = FUTBOL / "data"
-KEY_FILE = FUTBOL / "data" / ".odds_api_key"
+# Config-driven paths
+import sys
+sys.path.insert(0, str(Path(__file__).parent))
+from src.liga_mx.config import get_config, get_path
+
+FUTBOL = get_config().paths.project_root
+KEY_FILE = get_path("data_dir") / ".odds_api_key"
 SPORT = "soccer_mexico_ligamx"
 BASE = "https://api.the-odds-api.com/v4"
 
@@ -38,6 +45,18 @@ def median(prices):
     return s[n // 2] if n % 2 else (s[n // 2 - 1] + s[n // 2]) / 2
 
 
+def _hist_path_for(fetched_at: str) -> Path:
+    """Resolve monthly partition path for history CSV."""
+    # fetched_at format: "2026-11-23T22:54:06+0000" or similar
+    try:
+        yymm = fetched_at[:7]  # "2026-11"
+    except Exception:
+        yymm = time.strftime("%Y-%m")
+    hist_dir = get_path("data_dir") / "odds_history"
+    hist_dir.mkdir(parents=True, exist_ok=True)
+    return hist_dir / f"odds_history_{yymm}.csv"
+
+
 # 1) eventos + odds h2h y totals
 st, events, hdrs = get(f"/sports/{SPORT}/odds", {
     "apiKey": key, "regions": "us,eu,uk",
@@ -48,7 +67,7 @@ if st != 200:
     raise SystemExit("fallo odds: " + json.dumps(events)[:200])
 
 snapshot = {"fetched_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "events": events}
-(DATA / "odds_api_snapshot.json").write_text(json.dumps(snapshot, ensure_ascii=False, indent=1))
+(get_path("data_dir") / "odds_api_snapshot.json").write_text(json.dumps(snapshot, ensure_ascii=False, indent=1))
 
 rows = []
 for ev in events:
@@ -86,22 +105,24 @@ for ev in events:
         "h2h_a_med": round(median(h2h_a), 3) if h2h_a else "",
     })
 
-out_csv = DATA / "odds_api_jornada.csv"
+out_csv = get_path("odds_api_jornada")
 with open(out_csv, "w", newline="", encoding="utf-8") as f:
     w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
     w.writeheader()
     w.writerows(rows)
 
-# ---- historial para CLV: append con timestamp de la corrida ----
-hist_csv = DATA / "odds_history.csv"
-hist_fields = ["fetched_at", "commence", "home", "away", "ou_line", "over25_med", "under25_med", "h2h_h_med", "h2h_d_med", "h2h_a_med"]
-new_file = not hist_csv.exists()
-with open(hist_csv, "a", newline="", encoding="utf-8") as f:
-    w = csv.DictWriter(f, fieldnames=hist_fields)
-    if new_file:
-        w.writeheader()
-    for r in rows:
-        if r.get("ou_line") and r.get("over25_med"):
+# ---- historial para CLV: append a partición mensual ----
+hist_fields = ["fetched_at", "commence", "home", "away", "ou_line",
+               "over25_med", "under25_med", "h2h_h_med", "h2h_d_med", "h2h_a_med"]
+
+for r in rows:
+    if r.get("ou_line") and r.get("over25_med"):
+        hist_csv = _hist_path_for(snapshot["fetched_at"])
+        new_file = not hist_csv.exists()
+        with open(hist_csv, "a", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=hist_fields)
+            if new_file:
+                w.writeheader()
             w.writerow({k: r.get(k, "") for k in hist_fields} | {"fetched_at": snapshot["fetched_at"]})
 
 print(f"guardado: {out_csv} ({len(rows)} partidos)")

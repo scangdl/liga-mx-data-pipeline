@@ -29,11 +29,22 @@ class OddsFetcher:
         return None
 
     def load_odds_history(self) -> pd.DataFrame | None:
-        """Load odds history for CLV calculation."""
-        path = get_path("odds_history")
-        if path.exists():
-            return pd.read_csv(path)
-        return None
+        """Load odds history for CLV calculation from monthly partitions."""
+        hist_dir = get_path("data_dir") / "odds_history"
+        if not hist_dir.exists():
+            return None
+        files = sorted(hist_dir.glob("odds_history_*.csv"))
+        if not files:
+            return None
+        dfs = []
+        for f in files:
+            try:
+                dfs.append(pd.read_csv(f))
+            except Exception as e:
+                print(f"Warning: failed to read {f}: {e}")
+        if not dfs:
+            return None
+        return pd.concat(dfs, ignore_index=True)
 
     def get_closing_line(self, home: str, away: str, market: str) -> Any:
         """Get closing line for a specific fixture and market."""

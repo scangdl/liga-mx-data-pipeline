@@ -41,7 +41,7 @@ PRED = get_path("predictions_dir")
 MASTER_PARQUET = get_path("master_parquet")
 ESP_FIXTURES = get_path("espn_fixtures")
 ODDS_API_JORNADA = get_path("odds_api_jornada")
-ODDS_HISTORY = get_path("odds_history")
+ODDS_HISTORY_DIR = get_path("data_dir") / "odds_history"
 OVER25_MODEL = get_path("over25_model")
 MODEL_1X2 = get_path("model_1x2")
 PAPER_TRADES_OVER25 = get_path("paper_trades_over25")
@@ -515,16 +515,20 @@ def cmd_settle(market: str = "over25"):
     if "result" in trades.columns:
         trades["result"] = trades["result"].astype(object)
 
-    # Historial odds para CLV
-    hist_f = ODDS_HISTORY
+    # Historial odds para CLV (particionado mensual)
+    hist_dir = ODDS_HISTORY_DIR
     hist = None
-    if hist_f.exists():
+    if hist_dir.exists():
         try:
-            hist = pd.read_csv(hist_f)
-            hist["fetched_at"] = pd.to_datetime(hist["fetched_at"], format="mixed", utc=True)
-            hist["commence"] = pd.to_datetime(hist["commence"], utc=True)
-            hist["norm_home"] = canon_series(hist["home"].astype(str).str.strip().str.lower())
-            hist["norm_away"] = canon_series(hist["away"].astype(str).str.strip().str.lower())
+            files = sorted(hist_dir.glob("odds_history_*.csv"))
+            if files:
+                dfs = [pd.read_csv(f) for f in files]
+                hist = pd.concat(dfs, ignore_index=True)
+                # Normalize team names and timestamps
+                hist["fetched_at"] = pd.to_datetime(hist["fetched_at"], format="mixed", utc=True)
+                hist["commence"] = pd.to_datetime(hist["commence"], utc=True)
+                hist["norm_home"] = canon_series(hist["home"].astype(str).str.strip().str.lower())
+                hist["norm_away"] = canon_series(hist["away"].astype(str).str.strip().str.lower())
         except Exception as e:
             log(f"  (historial odds ilegible: {e})")
 
