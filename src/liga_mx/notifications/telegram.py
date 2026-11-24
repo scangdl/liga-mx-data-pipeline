@@ -27,29 +27,30 @@ class TelegramNotifier:
         if not self.enabled:
             print("[Telegram] WARNING: TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID no configurados")
     
-    def send(self, text: str, parse_mode: str = "HTML") -> bool:
-        """Envía mensaje a Telegram."""
-        if not self.enabled:
-            return False
-        
-        url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
-        payload = {
-            "chat_id": self.chat_id,
-            "text": text,
-            "parse_mode": parse_mode,
-            "disable_web_page_preview": True,
-        }
-        
-        try:
-            resp = requests.post(url, json=payload, timeout=10)
-            if resp.status_code == 200:
-                return True
-            else:
-                print(f"[Telegram] Error {resp.status_code}: {resp.text}")
+    def send(self, text: str, parse_mode: Optional[str] = "HTML") -> bool:
+            """Envía mensaje a Telegram."""
+            if not self.enabled:
                 return False
-        except Exception as e:
-            print(f"[Telegram] Exception: {e}")
-            return False
+
+            url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+            payload = {
+                "chat_id": self.chat_id,
+                "text": text,
+                "disable_web_page_preview": True,
+            }
+            if parse_mode:
+                payload["parse_mode"] = parse_mode
+
+            try:
+                resp = requests.post(url, json=payload, timeout=10)
+                if resp.status_code == 200:
+                    return True
+                else:
+                    print(f"[Telegram] Error {resp.status_code}: {resp.text}")
+                    return False
+            except Exception as e:
+                print(f"[Telegram] Exception: {e}")
+                return False
     
     def send_cron_summary(self, job_name: str, status: str, details: dict, duration_sec: float) -> bool:
         """Envía resumen de ejecución de cron job."""

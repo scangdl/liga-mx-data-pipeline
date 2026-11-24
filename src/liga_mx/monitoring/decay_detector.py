@@ -16,6 +16,7 @@ from sklearn.metrics import brier_score_loss, roc_auc_score
 from liga_mx.config import get_config, get_path
 from liga_mx.features import add_advanced_features
 from liga_mx.models import BTTSModel
+from liga_mx.notifications.twilio_whatsapp import get_twilio_notifier
 
 log = structlog.get_logger(__name__)
 
@@ -37,23 +38,27 @@ class DecayDetector:
     def __init__(self):
         self.cfg = get_config().monitoring.decay_detector
 
-    def _send_telegram_alert(self, message: str) -> bool:
+    def _send_telegram_alert(self, message: str, parse_mode: str | None = "HTML") -> bool:
         """Send alert via Telegram if configured."""
         try:
-            import subprocess
-            result = subprocess.run(
-                ["hermes", "send", "telegram", message],
-                capture_output=True, text=True, timeout=10
-            )
-            if result.returncode == 0:
-                log.info("Telegram alert sent")
-                return True
-            else:
-                log.warning(f"Telegram send failed: {result.stderr}")
-                return False
+            from liga_mx.notifications.telegram import get_notifier
+            return get_notifier().send(message, parse_mode=parse_mode)
         except Exception as e:
             log.warning(f"Telegram not available: {e}")
             return False
+
+    def _send_whatsapp_alert(self, message: str) -> bool:
+        """Send alert via WhatsApp (Twilio) if configured."""
+        try:
+            return get_twilio_notifier().send(message)
+        except Exception as e:
+            log.warning(f"WhatsApp not available: {e}")
+            return False
+
+    def _send_alerts(self, message: str) -> None:
+        """Send to all configured channels."""
+        self._send_telegram_alert(message)
+        self._send_whatsapp_alert(message)
 
     def run(self) -> dict[str, Any]:
         """Run decay detection and return results."""
@@ -206,11 +211,13 @@ class DecayDetector:
                 log.info(f"  {a['msg']}")
             log.info("=" * 60)
 
-            # Send Telegram alert
+            # Send alerts to all configured channels
             msg = f"⚠️ DECAY DETECTOR — {datetime.now().strftime('%Y-%m-%d')}\n\n" + "\n".join(a["msg"] for a in alerts)
             msg += f"\n\nRolling: Brier={brier:.4f}, AUC={auc:.4f}, Rel={reliability:.4f}"
             msg += f"\nBaseline: Brier={brier_mean:.4f}±{brier_std:.4f}, AUC={auc_mean:.4f}"
-            self._send_telegram_alert(msg)
+            # Send as plain text to avoid HTML parsing issues with emojis
+            self._send_telegram_alert(msg, parse_mode=None)
+            self._send_whatsapp_alert(msg)
         else:
             log.info("✅ Sin alertas — modelo estable")
 
