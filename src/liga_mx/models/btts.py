@@ -274,6 +274,7 @@ class BTTSModel(ModelBase):
             "train_cut": self.bundle.train_cut,
             "version": self.bundle.version,
             "metrics": self.bundle.metrics,
+            "platt_calibration": getattr(self, "_platt", None),
         }
 
         with open(path, "wb") as f:

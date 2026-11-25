@@ -76,17 +76,24 @@ class DecayDetector:
 
         version = bundle.get("version", "v2")
         if version == "v3_improved" or "ensemble_weights" in bundle:
-            model = bundle["xgb_model"]
+            # Load full ensemble
+            xgb_model = bundle["xgb_model"]
+            lr_model = bundle.get("lr_model")
+            lgb_model = bundle.get("lgb_model")
+            ensemble_weights = bundle["ensemble_weights"]
             scaler = bundle["scaler"]
             FEATS = bundle["features"]
             means = pd.Series(bundle["impute_means"])
-            log.info(f"Model: {version} (ensemble)")
+            platt = bundle.get("platt_calibration")  # Optional Platt calibration
+            log.info(f"Model: {version} (ensemble: {ensemble_weights})")
+            use_ensemble = True
         else:
             model = bundle["model"]
             scaler = bundle["scaler"]
             FEATS = bundle["features"]
             means = pd.Series(bundle["impute_means"])
             log.info(f"Model: {version}")
+            use_ensemble = False
 
         # Load features
         from liga_mx.features import StateBuilder
@@ -115,7 +122,24 @@ class DecayDetector:
         X = test_df[FEATS].fillna(means)
         y = test_df["btts"].astype(int).values
         Xs = scaler.transform(X) if scaler is not None else X.values
-        p = model.predict_proba(Xs)[:, 1]
+
+        if use_ensemble:
+            # Ensemble prediction
+            p_xgb = xgb_model.predict_proba(Xs)[:, 1]
+            p_lr = lr_model.predict_proba(Xs)[:, 1] if lr_model is not None else None
+            p_lgb = lgb_model.predict_proba(Xs)[:, 1] if lgb_model is not None else None
+
+            p = ensemble_weights["xgb"] * p_xgb
+            if p_lr is not None and "lr" in ensemble_weights:
+                p += ensemble_weights["lr"] * p_lr
+            if p_lgb is not None and "lgb" in ensemble_weights:
+                p += ensemble_weights["lgb"] * p_lgb
+
+            # Apply Platt calibration if available
+            if platt is not None:
+                p = platt.predict_proba(p.reshape(-1, 1))[:, 1]
+        else:
+            p = model.predict_proba(Xs)[:, 1]
 
         # Metrics
         brier = brier_score_loss(y, p)
