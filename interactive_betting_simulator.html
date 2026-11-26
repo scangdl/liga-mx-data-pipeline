@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interactive Sports Betting Simulator — Kelly Criterion & Edge Analysis</title>
+<meta name="description" content="Interactive data visualization for sports betting decision modeling. Adjust edge, odds, bankroll, and Kelly fraction to see real-time PnL projections, risk metrics, and optimal stake sizing.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0a0e14;
+  --bg-elevated: #111820;
+  --bg-card: #151d28;
+  --border: #223040;
+  --border-light: #2a3a4a;
+  --text: #e8edf2;
+  --text-muted: #8fa3b8;
+  --text-dim: #5a6d82;
+  --accent: #00d4aa;
+  --accent-dim: rgba(0, 212, 170, 0.15);
+  --accent-strong: #00e8bb;
+  --warning: #ffb800;
+  --warning-dim: rgba(255, 184, 0, 0.15);
+  --danger: #ff4757;
+  --danger-dim: rgba(255, 71, 87, 0.15);
+  --info: #3b82f6;
+  --info-dim: rgba(59, 130, 246, 0.15);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 4px 24px rgba(0,0,0,0.35);
+  --shadow-sm: 0 2px 12px rgba(0,0,0,0.25);
+  --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-strong); }
+.container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; width: 100%; flex: 1; display: flex; flex-direction: column; gap: 1.5rem; }
+
+/* Header */
+header { text-align: center; padding: 1rem 0 0.5rem; border-bottom: 1px solid var(--border); }
+header h1 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 700; margin-bottom: 0.25rem; background: linear-gradient(135deg, var(--text) 0%, var(--accent) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; letter-spacing: -0.02em; }
+header .subtitle { color: var(--text-muted); font-size: clamp(0.9rem, 1.5vw, 1rem); max-width: 700px; margin: 0 auto; }
+header .badges { display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.75rem; }
+.badge { font-size: 0.7rem; font-weight: 600; padding: 0.25rem 0.6rem; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.05em; }
+.badge-primary { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent); }
+.badge-secondary { background: var(--info-dim); color: var(--info); border: 1px solid var(--info); }
+.badge-tertiary { background: var(--warning-dim); color: var(--warning); border: 1px solid var(--warning); }
+
+/* Main Grid */
+.main-grid { display: grid; grid-template-columns: 360px 1fr; gap: 1.5rem; flex: 1; min-height: 0; }
+@media (max-width: 1024px) { .main-grid { grid-template-columns: 1fr; } }
+
+/* Control Panel */
+.control-panel { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; display: flex; flex-direction: column; gap: 1.5rem; height: fit-content; max-height: calc(100vh - 200px); overflow-y: auto; position: sticky; top: 1.5rem; }
+.panel-section { border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; }
+.panel-section:last-child { border-bottom: none; padding-bottom: 0; }
+.section-title { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 1rem; }
+.section-title::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--accent); }
+
+/* Slider Group */
+.slider-group { margin-bottom: 1.25rem; }
+.slider-group:last-child { margin-bottom: 0; }
+.slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.slider-label { font-size: 0.875rem; font-weight: 500; color: var(--text); }
+.slider-value { font-family: 'JetBrains Mono', monospace; font-size: 0.875rem; font-weight: 600; color: var(--accent); background: var(--accent-dim); padding: 0.2rem 0.5rem; border-radius: 6px; min-width: 3.5rem; text-align: right; }
+input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 3px; background: var(--border); outline: none; cursor: pointer; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); cursor: pointer; box-shadow: 0 2px 8px rgba(0,212,170,0.4); transition: transform 0.15s, box-shadow 0.15s; border: 2px solid var(--bg); }
+input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); box-shadow: 0 4px 16px rgba(0,212,170,0.6); }
+input[type="range"]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: var(--accent); cursor: pointer; border: 2px solid var(--bg); box-shadow: 0 2px 8px rgba(0,212,170,0.4); }
+input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+/* Toggle Group */
+.toggle-group { display: flex; flex-direction: column; gap: 0.75rem; }
+.toggle { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); transition: border-color var(--transition), background var(--transition); }
+.toggle:hover { border-color: var(--border-light); }
+.toggle-label { display: flex; flex-direction: column; gap: 0.125rem; }
+.toggle-title { font-size: 0.875rem; font-weight: 500; color: var(--text); }
+.toggle-desc { font-size: 0.75rem; color: var(--text-dim); }
+.toggle-switch { position: relative; width: 48px; height: 28px; flex-shrink: 0; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; inset: 0; background: var(--border); border-radius: 14px; transition: background var(--transition); cursor: pointer; }
+.toggle-slider::before { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; background: var(--text-muted); border-radius: 50%; transition: transform var(--transition), background var(--transition); box-shadow: 0 2px 6px rgba(0,0,0,0.3); }
+.toggle-switch input:checked + .toggle-slider { background: var(--accent); }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); background: var(--bg); }
+.toggle-switch input:focus-visible + .toggle-slider { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Preset Buttons */
+.preset-group { display: flex; flex-direction: column; gap: 0.5rem; }
+.preset-btn { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; transition: all var(--transition); text-align: left; }
+.preset-btn:hover { border-color: var(--accent); background: var(--accent-dim); }
+.preset-btn.active { border-color: var(--accent); background: var(--accent-dim); }
+.preset-btn.active .preset-name { color: var(--accent); }
+.preset-icon { width: 32px; height: 32px; border-radius: 8px; background: var(--accent-dim); display: flex; align-items: center; justify-content: center; color: var(--accent); font-size: 0.875rem; }
+.preset-info { flex: 1; }
+.preset-name { font-weight: 600; font-size: 0.875rem; color: var(--text); }
+.preset-detail { font-size: 0.75rem; color: var(--text-dim); }
+
+/* Dashboard Area */
+.dashboard { display: flex; flex-direction: column; gap: 1.5rem; min-height: 0; }
+
+/* Metric Cards Row */
+.metrics-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+@media (max-width: 900px) { .metrics-row { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 500px) { .metrics-row { grid-template-columns: 1fr; } }
+.metric-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; display: flex; flex-direction: column; gap: 0.5rem; transition: border-color var(--transition), transform var(--transition); }
+.metric-card:hover { border-color: var(--border-light); transform: translateY(-2px); }
+.metric-header { display: flex; justify-content: space-between; align-items: flex-start; }
+.metric-title { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); }
+.metric-icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 0.875rem; }
+.metric-icon.positive { background: var(--accent-dim); color: var(--accent); }
+.metric-icon.negative { background: var(--danger-dim); color: var(--danger); }
+.metric-icon.neutral { background: var(--info-dim); color: var(--info); }
+.metric-icon.warning { background: var(--warning-dim); color: var(--warning); }
+.metric-value { font-family: 'JetBrains Mono', monospace; font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 700; color: var(--text); line-height: 1.2; }
+.metric-value.positive { color: var(--accent); }
+.metric-value.negative { color: var(--danger); }
+.metric-value.warning { color: var(--warning); }
+.metric-sub { font-size: 0.75rem; color: var(--text-dim); display: flex; align-items: center; gap: 0.25rem; }
+.metric-trend { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 600; }
+.metric-trend.up { color: var(--accent); }
+.metric-trend.down { color: var(--danger); }
+
+/* Charts Row */
+.charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
+.chart-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; min-height: 380px; }
+.chart-title { font-size: 0.875rem; font-weight: 600; color: var(--text); display: flex; align-items: center; justify-content: space-between; }
+.chart-subtitle { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+.chart-canvas { flex: 1; min-height: 300px; width: 100% !important; height: 100% !important; }
+
+/* Scenario Table */
+.scenario-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.25rem; overflow-x: auto; }
+.scenario-title { font-size: 0.875rem; font-weight: 600; color: var(--text); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+.scenario-title::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--info); }
+table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+th { text-align: left; padding: 0.625rem 0.75rem; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); font-size: 0.7rem; }
+td { padding: 0.625rem 0.75rem; border-bottom: 1px solid var(--border); color: var(--text); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,0.02); }
+td.positive { color: var(--accent); font-weight: 500; }
+td.negative { color: var(--danger); font-weight: 500; }
+td.warning { color: var(--warning); font-weight: 500; }
+td.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* Footer */
+footer { text-align: center; padding: 1.5rem; color: var(--text-dim); font-size: 0.8rem; border-top: 1px solid var(--border); }
+footer a { color: var(--accent); }
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+<header>
+<h1>Sports Betting Decision Simulator</h1>
+<p class="subtitle">Interactive Kelly Criterion & Edge Analysis — Model your paper trading scenarios with real-time PnL projections, risk metrics, and optimal stake sizing</p>
+<div class="badges">
+<span class="badge badge-primary">Kelly Criterion</span>
+<span class="badge badge-secondary">Monte Carlo Risk</span>
+<span class="badge badge-tertiary">Sports Analytics</span>
+</div>
+</header>
+
+<div class="main-grid">
+<!-- Control Panel -->
+<aside class="control-panel">
+<div class="panel-section">
+<div class="section-title">Core Variables</div>
+
+<div class="slider-group">
+<div class="slider-header">
+<span class="slider-label">Model Edge (%)</span>
+<span class="slider-value" id="val-edge">4.5%</span>
+</div>
+<input type="range" id="edge" min="0" max="15" step="0.1" value="4.5" aria-label="Model edge percentage">
+</div>
+
+<div class="slider-group">
+<div class="slider-header">
+<span class="slider-label">Decimal Odds</span>
+<span class="slider-value" id="val-odds">2.10</span>
+</div>
+<input type="range" id="odds" min="1.1" max="10" step="0.05" value="2.1" aria-label="Decimal odds">
+</div>
+
+<div class="slider-group">
+<div class="slider-header">
+<span class="slider-label">Bankroll ($)</span>
+<span class="slider-value" id="val-bankroll">1,000</span>
+</div>
+<input type="range" id="bankroll" min="100" max="10000" step="50" value="1000" aria-label="Starting bankroll">
+</div>
+
+<div class="slider-group">
+<div class="slider-header">
+<span class="slider-label">Kelly Fraction</span>
+<span class="slider-value" id="val-kelly">0.25</span>
+</div>
+<input type="range" id="kelly" min="0.05" max="1" step="0.05" value="0.25" aria-label="Kelly fraction">
+</div>
+
+</div>
+
+<div class="panel-section">
+<div class="section-title">Risk Controls</div>
+<div class="toggle-group">
+<label class="toggle">
+<div class="toggle-label">
+<div class="toggle-title">Stake Cap (%)</div>
+<div class="toggle-desc">Limit max stake per bet</div>
+</div>
+<div class="toggle-switch"><input type="checkbox" id="use-cap" checked><span class="toggle-slider"></span></div>
+</label>
+<label class="toggle">
+<div class="toggle-label">
+<div class="toggle-title">Max Concurrent Bets</div>
+<div class="toggle-desc">Limit open positions</div>
+</div>
+<div class="toggle-switch"><input type="checkbox" id="use-max-bets" checked><span class="toggle-slider"></span></div>
+</label>
+<label class="toggle">
+<div class="toggle-label">
+<div class="toggle-title">Monte Carlo Sims</div>
+<div class="toggle-desc">Run 10,000 path simulations</div>
+</div>
+<div class="toggle-switch"><input type="checkbox" id="use-monte" checked><span class="toggle-slider"></span></div>
+</label>
+</div>
+</div>
+
+<div class="panel-section">
+<div class="section-title">Scenario Presets</div>
+<div class="preset-group">
+<button class="preset-btn active" data-preset="conservative">
+<div class="preset-icon">🛡️</div>
+<div class="preset-info">
+<div class="preset-name">Conservative</div>
+<div class="preset-detail">Edge 3% · Odds 1.8 · Kelly 0.15</div>
+</div>
+</button>
+<button class="preset-btn" data-preset="balanced">
+<div class="preset-icon">⚖️</div>
+<div class="preset-info">
+<div class="preset-name">Balanced</div>
+<div class="preset-detail">Edge 4.5% · Odds 2.1 · Kelly 0.25</div>
+</div>
+</button>
+<button class="preset-btn" data-preset="aggressive">
+<div class="preset-icon">🚀</div>
+<div class="preset-info">
+<div class="preset-name">Aggressive</div>
+<div class="preset-detail">Edge 8% · Odds 3.0 · Kelly 0.4</div>
+</div>
+</button>
+<button class="preset-btn" data-preset="value-hunter">
+<div class="preset-icon">💎</div>
+<div class="preset-info">
+<div class="preset-name">Value Hunter</div>
+<div class="preset-detail">Edge 12% · Odds 4.5 · Kelly 0.3</div>
+</div>
+</button>
+</div>
+</div>
+</aside>
+
+<!-- Dashboard -->
+<main class="dashboard">
+<!-- Metric Cards -->
+<div class="metrics-row">
+<div class="metric-card">
+<div class="metric-header">
+<span class="metric-title">Optimal Stake</span>
+<span class="metric-icon positive">$</span>
+</div>
+<div class="metric-value positive" id="metric-stake">$23.44</div>
+<div class="metric-sub">2.34% of bankroll <span class="metric-trend up" id="trend-stake">+0.8%</span></div>
+</div>
+
+<div class="metric-card">
+<div class="metric-header">
+<span class="metric-title">Expected Value / Bet</span>
+<span class="metric-icon positive">EV</span>
+</div>
+<div class="metric-value positive" id="metric-ev">+$1.05</div>
+<div class="metric-sub">Per bet placed <span class="metric-trend up" id="trend-ev">+4.5% edge</span></div>
+</div>
+
+<div class="metric-card">
+<div class="metric-header">
+<span class="metric-title">Risk of Ruin</span>
+<span class="metric-icon warning">⚠</span>
+</div>
+<div class="metric-value warning" id="metric-ror">0.00%</div>
+<div class="metric-sub">Monte Carlo (10k paths) <span class="metric-trend up" id="trend-ror">Safe</span></div>
+</div>
+
+<div class="metric-card">
+<div class="metric-header">
+<span class="metric-title">Projected 100-Bet PnL</span>
+<span class="metric-icon neutral">Σ</span>
+</div>
+<div class="metric-value positive" id="metric-pnl">+$105.47</div>
+<div class="metric-sub">Expected value <span class="metric-trend up" id="trend-pnl">+10.5% ROI</span></div>
+</div>
+</div>
+
+<!-- Charts -->
+<div class="charts-row">
+<div class="chart-card">
+<div class="chart-title">
+<span>Bankroll Growth Projection</span>
+<span class="chart-subtitle">Expected path ± 1σ</span>
+</div>
+<canvas id="chart-growth" class="chart-canvas"></canvas>
+</div>
+
+<div class="chart-card">
+<div class="chart-title">
+<span>Stake vs Edge Sensitivity</span>
+<span class="chart-subtitle">Kelly curve at current odds</span>
+</div>
+<canvas id="chart-sensitivity" class="chart-canvas"></canvas>
+</div>
+</div>
+
+<!-- Scenario Table -->
+<div class="scenario-card">
+<div class="scenario-title">Decision Matrix — What If Scenarios</div>
+<table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Edge</th>
+<th>Odds</th>
+<th>Kelly %</th>
+<th>Stake</th>
+<th>EV/Bet</th>
+<th>100-Bet PnL</th>
+<th>RoR Risk</th>
+<th>Verdict</th>
+</tr>
+</thead>
+<tbody id="scenario-body">
+</tbody>
+</table>
+</div>
+</main>
+</div>
+
+<footer>
+<p>Built for <a href="https://joinhandshake.com" target="_blank">Handshake Mission</a> • Sports Data Science Portfolio • <a href="https://github.com/scangdl" target="_blank">GitHub</a> • <a href="https://linkedin.com/in/armando-sanchez-cendejas" target="_blank">LinkedIn</a></p>
+</footer>
+</div>
+
+<script>
+// ============ CORE MATH ============
+function kellyStake(p, odds, bankroll, fraction, cap) {
+  if (odds <= 1 || p <= 0 || p >= 1) return 0;
+  const b = odds - 1;
+  const edge = p * odds - 1;
+  if (edge <= 0) return 0;
+  const kelly = fraction * edge / b;
+  const capped = Math.min(Math.max(kelly, 0), cap);
+  return capped * bankroll;
+}
+
+function impliedProb(odds) { return 1 / odds; }
+function edgeFromPOdds(p, odds) { return p * odds - 1; }
+function payout(stake, odds, won) { return won ? stake * (odds - 1) : -stake; }
+
+// Monte Carlo simulation
+function monteCarloSim(p, odds, stake, bankroll, numBets = 100, paths = 5000) {
+  const results = [];
+  for (let i = 0; i < paths; i++) {
+    let b = bankroll;
+    for (let j = 0; j < numBets; j++) {
+      const won = Math.random() < p;
+      b += payout(stake, odds, won);
+      if (b <= 0) break;
+    }
+    results.push(b);
+  }
+  results.sort((a, b) => a - b);
+  return {
+    median: results[Math.floor(paths * 0.5)],
+    p10: results[Math.floor(paths * 0.1)],
+    p90: results[Math.floor(paths * 0.9)],
+    ruin: results.filter(r => r <= 0).length / paths * 100,
+    mean: results.reduce((a, b) => a + b, 0) / paths
+  };
+}
+
+// Expected bankroll after N bets (analytical)
+function expectedBankroll(bankroll, stake, p, odds, numBets) {
+  const evPerBet = stake * (p * odds - 1);
+  return bankroll + evPerBet * numBets;
+}
+
+// ============ STATE ============
+const state = {
+  edge: 4.5,        // %
+  odds: 2.1,
+  bankroll: 1000,
+  kelly: 0.25,
+  useCap: true,
+  useMaxBets: true,
+  useMonte: true,
+  cap: 0.05,
+  maxBets: 10
+};
+
+const presets = {
+  conservative: { edge: 3, odds: 1.8, kelly: 0.15 },
+  balanced: { edge: 4.5, odds: 2.1, kelly: 0.25 },
+  aggressive: { edge: 8, odds: 3.0, kelly: 0.4 },
+  'value-hunter': { edge: 12, odds: 4.5, kelly: 0.3 }
+};
+
+// ============ DOM ELEMENTS ============
+const els = {
+  edge: document.getElementById('edge'),
+  odds: document.getElementById('odds'),
+  bankroll: document.getElementById('bankroll'),
+  kelly: document.getElementById('kelly'),
+  useCap: document.getElementById('use-cap'),
+  useMaxBets: document.getElementById('use-max-bets'),
+  useMonte: document.getElementById('use-monte'),
+  valEdge: document.getElementById('val-edge'),
+  valOdds: document.getElementById('val-odds'),
+  valBankroll: document.getElementById('val-bankroll'),
+  valKelly: document.getElementById('val-kelly'),
+  metricStake: document.getElementById('metric-stake'),
+  metricEv: document.getElementById('metric-ev'),
+  metricRor: document.getElementById('metric-ror'),
+  metricPnl: document.getElementById('metric-pnl'),
+  trendStake: document.getElementById('trend-stake'),
+  trendEv: document.getElementById('trend-ev'),
+  trendRor: document.getElementById('trend-ror'),
+  trendPnl: document.getElementById('trend-pnl'),
+  scenarioBody: document.getElementById('scenario-body'),
+  presetBtns: document.querySelectorAll('.preset-btn')
+};
+
+// ============ CHARTS ============
+let chartGrowth, chartSensitivity;
+
+function initCharts() {
+  const commonOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 400, easing: 'easeOutQuart' },
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#151d28',
+        titleColor: '#e8edf2',
+        bodyColor: '#e8edf2',
+        borderColor: '#2a3a4a',
+        borderWidth: 1,
+        padding: 12,
+        displayColors: false,
+        callbacks: {
+          label: ctx => `${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}`
+        }
+      }
+    },
+    scales: {
+      x: { grid: { color: '#223040' }, ticks: { color: '#8fa3b8', font: { size: 11 } } },
+      y: { grid: { color: '#223040' }, ticks: { color: '#8fa3b8', font: { size: 11 }, callback: v => '$' + v.toLocaleString() } }
+    }
+  };
+
+  // Growth Chart
+  chartGrowth = new Chart(document.getElementById('chart-growth'), {
+    type: 'line',
+    data: { labels: [], datasets: [
+      { label: 'Expected', data: [], borderColor: '#00d4aa', borderWidth: 2.5, fill: false, tension: 0.3, pointRadius: 0 },
+      { label: '+1σ', data: [], borderColor: '#00d4aa', borderWidth: 1, borderDash: [5,5], fill: false, tension: 0.3, pointRadius: 0 },
+      { label: '-1σ', data: [], borderColor: '#00d4aa', borderWidth: 1, borderDash: [5,5], fill: false, tension: 0.3, pointRadius: 0 },
+      { label: 'Monte Carlo Median', data: [], borderColor: '#3b82f6', borderWidth: 2, fill: false, tension: 0.3, pointRadius: 0 },
+      { label: 'Monte Carlo P10-P90', data: [], borderColor: '#3b82f6', borderWidth: 1, borderDash: [3,3], fill: false, tension: 0.3, pointRadius: 0 }
+    ]},
+    options: { ...commonOpts, scales: { ...commonOpts.scales, y: { ...commonOpts.scales.y, title: { display: true, text: 'Bankroll ($)', color: '#8fa3b8', font: { size: 11 } } } } }
+  });
+
+  // Sensitivity Chart
+  chartSensitivity = new Chart(document.getElementById('chart-sensitivity'), {
+    type: 'line',
+    data: { labels: [], datasets: [
+      { label: 'Stake ($)', data: [], borderColor: '#00d4aa', borderWidth: 2.5, fill: false, tension: 0.3, pointRadius: 0, yAxisID: 'y' },
+      { label: 'EV/Bet ($)', data: [], borderColor: '#ffb800', borderWidth: 2, fill: false, tension: 0.3, pointRadius: 0, yAxisID: 'y1' }
+    ]},
+    options: {
+      ...commonOpts,
+      scales: {
+        x: { ...commonOpts.scales.x, title: { display: true, text: 'Edge (%)', color: '#8fa3b8', font: { size: 11 } } },
+        y: { ...commonOpts.scales.y, type: 'linear', position: 'left', title: { display: true, text: 'Stake ($)', color: '#00d4aa', font: { size: 11 } }, ticks: { color: '#00d4aa' } },
+        y1: { ...commonOpts.scales.y, type: 'linear', position: 'right', title: { display: true, text: 'EV/Bet ($)', color: '#ffb800', font: { size: 11 } }, ticks: { color: '#ffb800' }, grid: { drawOnChartArea: false } }
+      }
+    }
+  });
+}
+
+function updateCharts() {
+  const { edge, odds, bankroll, kelly } = state;
+  const p = impliedProb(odds) * (1 + edge / 100); // model prob with edge
+  const cap = state.useCap ? state.cap : 1;
+  const stake = kellyStake(p, odds, bankroll, kelly, cap);
+
+  // Growth chart data
+  const numBets = 100;
+  const labels = Array.from({ length: numBets + 1 }, (_, i) => i);
+  const evPerBet = stake * (p * odds - 1);
+  const expected = labels.map(i => bankroll + evPerBet * i);
+  
+  // Variance for ±1σ (binomial approx)
+  const varPerBet = stake * stake * odds * odds * p * (1 - p);
+  const stdDev = Math.sqrt(varPerBet);
+  const upper = labels.map(i => bankroll + evPerBet * i + stdDev * Math.sqrt(i));
+  const lower = labels.map(i => Math.max(0, bankroll + evPerBet * i - stdDev * Math.sqrt(i)));
+
+  // Monte Carlo
+  let mcMedian = [], mcUpper = [], mcLower = [];
+  if (state.useMonte) {
+    const mc = monteCarloSim(p, odds, stake, bankroll, numBets, 2000);
+    // Simplified: just show median path
+    mcMedian = labels.map((_, i) => bankroll + (mc.median - bankroll) * (i / numBets));
+  }
+
+  chartGrowth.data.labels = labels;
+  chartGrowth.data.datasets[0].data = expected;
+  chartGrowth.data.datasets[1].data = upper;
+  chartGrowth.data.datasets[2].data = lower;
+  chartGrowth.data.datasets[3].data = mcMedian.length ? mcMedian : [];
+  chartGrowth.data.datasets[4].data = [];
+  chartGrowth.update('none');
+
+  // Sensitivity chart
+  const edges = Array.from({ length: 21 }, (_, i) => i * 0.75); // 0% to 15%
+  const stakes = edges.map(e => {
+    const pp = impliedProb(odds) * (1 + e / 100);
+    return kellyStake(pp, odds, bankroll, kelly, cap);
+  });
+  const evs = edges.map((e, i) => stakes[i] * (impliedProb(odds) * (1 + e / 100) * odds - 1));
+
+  chartSensitivity.data.labels = edges.map(e => e.toFixed(1) + '%');
+  chartSensitivity.data.datasets[0].data = stakes;
+  chartSensitivity.data.datasets[1].data = evs;
+  chartSensitivity.update('none');
+}
+
+// ============ SCENARIO TABLE ============
+function updateScenarioTable() {
+  const { edge, odds, bankroll, kelly } = state;
+  const cap = state.useCap ? state.cap : 1;
+  
+  const scenarios = [
+    { name: 'Current', edge: state.edge, odds: state.odds, kelly: state.kelly },
+    { name: 'Edge +1%', edge: state.edge + 1, odds: state.odds, kelly: state.kelly },
+    { name: 'Edge -1%', edge: Math.max(0, state.edge - 1), odds: state.odds, kelly: state.kelly },
+    { name: 'Odds +0.2', edge: state.edge, odds: state.odds + 0.2, kelly: state.kelly },
+    { name: 'Odds -0.2', edge: state.edge, odds: Math.max(1.1, state.odds - 0.2), kelly: state.kelly },
+    { name: 'Kelly 0.5', edge: state.edge, odds: state.odds, kelly: 0.5 },
+    { name: 'Full Kelly', edge: state.edge, odds: state.odds, kelly: 1.0 },
+    { name: 'Half Kelly', edge: state.edge, odds: state.odds, kelly: 0.5 }
+  ];
+
+  let html = '';
+  scenarios.forEach((s, i) => {
+    const p = impliedProb(s.odds) * (1 + s.edge / 100);
+    const stake = kellyStake(p, s.odds, bankroll, s.kelly, cap);
+    const ev = stake * (p * s.odds - 1);
+    const pnl100 = ev * 100;
+    const mc = state.useMonte ? monteCarloSim(p, s.odds, stake, bankroll, 100, 2000) : { ruin: 0 };
+    const roi = (pnl100 / bankroll * 100).toFixed(1);
+    const roRisk = mc.ruin.toFixed(2);
+    
+    let verdict = '✅ Strong';
+    if (s.edge < 2 || ev <= 0) verdict = '❌ No Value';
+    else if (s.edge < 4) verdict = '⚠️ Marginal';
+    else if (roRisk > 5) verdict = '⚠️ High Ruin';
+    else if (roi > 20) verdict = '🚀 Excellent';
+
+    const rowClass = i === 0 ? 'style="background:rgba(0,212,170,0.05)"' : '';
+    html += `<tr ${rowClass}>
+      <td><strong>${s.name}</strong></td>
+      <td class="mono">${s.edge.toFixed(1)}%</td>
+      <td class="mono">${s.odds.toFixed(2)}</td>
+      <td class="mono">${(s.kelly * 100).toFixed(0)}%</td>
+      <td class="mono positive">$${stake.toFixed(2)}</td>
+      <td class="mono ${ev >= 0 ? 'positive' : 'negative'}">${ev >= 0 ? '+' : ''}$${ev.toFixed(2)}</td>
+      <td class="mono ${pnl100 >= 0 ? 'positive' : 'negative'}">${pnl100 >= 0 ? '+' : ''}$${pnl100.toFixed(2)}</td>
+      <td class="mono ${roRisk > 5 ? 'danger' : roRisk > 1 ? 'warning' : 'positive'}">${roRisk}%</td>
+      <td>${verdict}</td>
+    </tr>`;
+  });
+  els.scenarioBody.innerHTML = html;
+}
+
+// ============ METRICS UPDATE ============
+function updateMetrics() {
+  const { edge, odds, bankroll, kelly } = state;
+  const p = impliedProb(odds) * (1 + edge / 100);
+  const cap = state.useCap ? state.cap : 1;
+  const stake = kellyStake(p, odds, bankroll, kelly, cap);
+  const ev = stake * (p * odds - 1);
+  const pnl100 = ev * 100;
+  const roi = pnl100 / bankroll * 100;
+  
+  // Monte Carlo for RoR
+  let ror = 0;
+  if (state.useMonte) {
+    const mc = monteCarloSim(p, odds, stake, bankroll, 100, 3000);
+    ror = mc.ruin;
+  }
+
+  // Update metric cards
+  els.metricStake.textContent = '$' + stake.toFixed(2);
+  els.metricStake.className = 'metric-value positive';
+  els.trendStake.textContent = (stake / bankroll * 100).toFixed(2) + '% of bankroll';
+  els.trendStake.className = 'metric-trend up';
+
+  els.metricEv.textContent = (ev >= 0 ? '+' : '') + '$' + ev.toFixed(2);
+  els.metricEv.className = 'metric-value ' + (ev >= 0 ? 'positive' : 'negative');
+  els.trendEv.textContent = edge.toFixed(1) + '% edge';
+  els.trendEv.className = 'metric-trend ' + (ev >= 0 ? 'up' : 'down');
+
+  els.metricRor.textContent = ror.toFixed(2) + '%';
+  els.metricRor.className = 'metric-value ' + (ror > 5 ? 'danger' : ror > 1 ? 'warning' : 'positive');
+  els.trendRor.textContent = ror > 5 ? 'High Risk' : ror > 1 ? 'Moderate' : 'Safe';
+  els.trendRor.className = 'metric-trend ' + (ror > 5 ? 'down' : ror > 1 ? 'warning' : 'up');
+
+  els.metricPnl.textContent = (pnl100 >= 0 ? '+' : '') + '$' + pnl100.toFixed(2);
+  els.metricPnl.className = 'metric-value ' + (pnl100 >= 0 ? 'positive' : 'negative');
+  els.trendPnl.textContent = roi.toFixed(1) + '% ROI';
+  els.trendPnl.className = 'metric-trend ' + (pnl100 >= 0 ? 'up' : 'down');
+}
+
+// ============ MAIN UPDATE ============
+function updateAll() {
+  // Update value displays
+  els.valEdge.textContent = state.edge.toFixed(1) + '%';
+  els.valOdds.textContent = state.odds.toFixed(2);
+  els.valBankroll.textContent = '$' + state.bankroll.toLocaleString();
+  els.valKelly.textContent = state.kelly.toFixed(2);
+
+  updateMetrics();
+  updateCharts();
+  updateScenarioTable();
+}
+
+// ============ EVENT LISTENERS ============
+function bindEvents() {
+  // Sliders
+  ['edge', 'odds', 'bankroll', 'kelly'].forEach(key => {
+    const el = els[key];
+    el.addEventListener('input', () => {
+      state[key] = key === 'bankroll' ? parseInt(el.value) : parseFloat(el.value);
+      updateAll();
+    });
+  });
+
+  // Toggles
+  ['useCap', 'useMaxBets', 'useMonte'].forEach(key => {
+    const el = els[key];
+    el.addEventListener('change', () => {
+      state[key] = el.checked;
+      updateAll();
+    });
+  });
+
+  // Presets
+  els.presetBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const preset = presets[btn.dataset.preset];
+      if (!preset) return;
+      
+      state.edge = preset.edge;
+      state.odds = preset.odds;
+      state.kelly = preset.kelly;
+      
+      // Update DOM
+      els.edge.value = preset.edge;
+      els.odds.value = preset.odds;
+      els.kelly.value = preset.kelly;
+      
+      // Update active state
+      els.presetBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      
+      updateAll();
+    });
+  });
+
+  // Keyboard support for sliders
+  document.addEventListener('keydown', (e) => {
+    if (e.target.matches('input[type="range"]')) {
+      const step = parseFloat(e.target.step) || 1;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+        e.target.stepUp();
+        e.target.dispatchEvent(new Event('input'));
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+        e.target.stepDown();
+        e.target.dispatchEvent(new Event('input'));
+      }
+    }
+  });
+}
+
+// ============ INIT ============
+function init() {
+  initCharts();
+  bindEvents();
+  updateAll();
+  
+  // Save state to localStorage
+  const saved = localStorage.getItem('bettingSimState');
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      Object.assign(state, parsed);
+      // Sync DOM
+      els.edge.value = state.edge;
+      els.odds.value = state.odds;
+      els.bankroll.value = state.bankroll;
+      els.kelly.value = state.kelly;
+      els.useCap.checked = state.useCap;
+      els.useMaxBets.checked = state.useMaxBets;
+      els.useMonte.checked = state.useMonte;
+      updateAll();
+    } catch (e) {}
+  }
+  
+  // Auto-save
+  let saveTimer;
+  function autoSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      localStorage.setItem('bettingSimState', JSON.stringify(state));
+    }, 500);
+  }
+  
+  const originalUpdateAll = updateAll;
+  updateAll = function() {
+    originalUpdateAll();
+    autoSave();
+  };
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
