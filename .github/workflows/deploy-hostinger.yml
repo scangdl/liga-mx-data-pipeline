@@ -5,29 +5,36 @@ on:
     branches: [main]
     paths:
       - 'interactive_betting_simulator.html'
-  workflow_dispatch:  # Permite ejecución manual desde GitHub UI
+  workflow_dispatch:
 
 jobs:
   deploy:
     name: Deploy to Hostinger via SFTP
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - name: Verify file exists
+      - name: Setup SSH known_hosts
         run: |
-          if [[ ! -f "interactive_betting_simulator.html" ]]; then
-            echo "❌ interactive_betting_simulator.html not found in repo root"
-            exit 1
-          fi
-          echo "✅ File found: $(wc -c < interactive_betting_simulator.html) bytes"
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.HOSTINGER_HOST }} >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
 
-      - name: Deploy to Hostinger via SFTP
+      - name: Verify SSH key format
+        run: |
+          echo "${{ secrets.HOSTINGER_SSH_KEY }}" > /tmp/deploy_key
+          chmod 600 /tmp/deploy_key
+          ssh-keygen -y -f /tmp/deploy_key > /dev/null && echo "✅ Key válida" || echo "❌ Key INVÁLIDA"
+
+      - name: Test SSH connection
+        run: |
+          ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "echo 'SSH OK' && ls ${{ secrets.HOSTINGER_TARGET_DIR }}/"
+
+      - name: Deploy via SFTP
         uses: appleboy/sftp-action@v1
         with:
           host: ${{ secrets.HOSTINGER_HOST }}
@@ -41,10 +48,8 @@ jobs:
 
       - name: Verify deployment
         run: |
-          echo "✅ Deployment completed successfully"
+          echo "✅ Deployment completed"
           echo "🌐 Live at: https://${{ secrets.HOSTINGER_DOMAIN }}/simulator/"
-          echo "📁 Deployed to: ${{ secrets.HOSTINGER_TARGET_DIR }}/simulator/index.html"
 
-# Permisos mínimos necesarios
 permissions:
   contents: read
