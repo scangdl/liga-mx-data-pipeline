@@ -35,7 +35,7 @@ jobs:
           ssh -i /tmp/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=10 ${{ secrets.HOSTINGER_USER }}@${{ secrets.HOSTINGER_HOST }} "echo 'SSH OK' && ls ${{ secrets.HOSTINGER_TARGET_DIR }}/"
 
       - name: Deploy via SFTP
-        uses: appleboy/sftp-action@v1
+        uses: appleboy/sftp-action@master
         with:
           host: ${{ secrets.HOSTINGER_HOST }}
           username: ${{ secrets.HOSTINGER_USER }}
